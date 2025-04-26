@@ -13,7 +13,10 @@ import {
   ViewModule as GridViewIcon,
   ViewQuilt as DesktopViewIcon,
   SelectAll as SelectIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  ContentCut as CutIcon,
+  ContentCopy as CopyIcon,
+  ContentPaste as PasteIcon
 } from '@mui/icons-material';
 
 const Toolbar = ({
@@ -24,7 +27,11 @@ const Toolbar = ({
   isMultiSelectMode,
   onToggleMultiSelect,
   selectedCount,
-  onDeleteSelected
+  onDeleteSelected,
+  onCutSelected,
+  onCopySelected,
+  onPaste,
+  darkMode
 }) => {
   return (
     <Box
@@ -32,7 +39,7 @@ const Toolbar = ({
         display: 'flex',
         alignItems: 'center',
         padding: 1,
-        borderBottom: '1px solid rgba(0, 0, 0, 0.12)'
+        borderBottom: `1px solid ${darkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
       }}
     >
       <Tooltip title="Create New Folder">
@@ -52,6 +59,41 @@ const Toolbar = ({
       <Tooltip title={isDesktopView ? "Switch to Grid View" : "Switch to Desktop View"}>
         <IconButton onClick={onToggleView} size="medium">
           {isDesktopView ? <GridViewIcon /> : <DesktopViewIcon />}
+        </IconButton>
+      </Tooltip>
+      
+      <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+      
+      <Tooltip title="Cut">
+        <span>
+          <IconButton 
+            onClick={onCutSelected}
+            disabled={!isMultiSelectMode || selectedCount === 0}
+            size="medium"
+          >
+            <CutIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      
+      <Tooltip title="Copy">
+        <span>
+          <IconButton 
+            onClick={onCopySelected}
+            disabled={!isMultiSelectMode || selectedCount === 0}
+            size="medium"
+          >
+            <CopyIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      
+      <Tooltip title="Paste">
+        <IconButton 
+          onClick={onPaste}
+          size="medium"
+        >
+          <PasteIcon />
         </IconButton>
       </Tooltip>
       

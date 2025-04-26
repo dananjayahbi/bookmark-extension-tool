@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useDrag } from 'react-dnd';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDrag, useDrop } from 'react-dnd';
 import { getCustomIcon, getBookmarkIconUrl, getCustomIconData } from '../utils/bookmarkUtils';
-import { Paper, Typography, Box, Checkbox } from '@mui/material';
+import { Paper, Typography, Box, Checkbox, Badge } from '@mui/material';
 import { 
   Folder as FolderIcon,
   Description as DescriptionIcon,
@@ -43,33 +43,74 @@ const BookmarkItem = ({
   isMultiSelectMode = false,
   isSelected = false,
   onToggleSelect,
-  darkMode = false
+  darkMode = false,
+  gridDimensions,
+  onDropInFolder
 }) => {
   const [customIcon, setCustomIcon] = useState(null);
   const [customIconData, setCustomIconData] = useState(null);
   const [faviconUrl, setFaviconUrl] = useState(null);
   const [itemPosition, setItemPosition] = useState(position || { x: 0, y: 0 });
+  const [isHovering, setIsHovering] = useState(false);
   const isFolder = !item.url;
+  const itemRef = useRef(null);
   
+  // For dragging individual items
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'BOOKMARK_ITEM',
-    item: () => ({ 
-      id: item.id, 
-      isFolder, 
-      position: itemPosition,
-      originalPosition: itemPosition
-    }),
-    canDrag: !isMultiSelectMode, // Disable dragging in multi-select mode
+    item: () => {
+      if (isSelected && onDropInFolder) {
+        // If this is part of a multi-selection, use special handler
+        return {
+          type: 'MULTI_BOOKMARK_ITEMS',
+          items: item.id,
+          isFolder,
+          position: itemPosition,
+          originalPosition: itemPosition
+        };
+      }
+      return { 
+        id: item.id, 
+        isFolder, 
+        position: itemPosition,
+        originalPosition: itemPosition
+      };
+    },
+    canDrag: !isMultiSelectMode || isSelected, // Can drag in multi-select mode only if selected
     end: (draggedItem, monitor) => {
       const dropResult = monitor.getDropResult();
       
       if (dropResult) {
-        if (dropResult.desktop && isDesktopView) {
-          // Update position on desktop view
+        if (dropResult.folderId && onDropInFolder) {
+          // Item was dropped into a folder
+          onDropInFolder([draggedItem.id], dropResult.folderId);
+        }
+        else if (dropResult.desktop && isDesktopView) {
+          // Calculate new position for desktop view
+          if (dropResult.multiple) {
+            // Part of multi-drop (handled by parent component)
+            return;
+          }
+          
+          // Individual item position update
+          const deltaX = dropResult.x - monitor.getInitialClientOffset().x;
+          const deltaY = dropResult.y - monitor.getInitialClientOffset().y;
+          
           const newPosition = { 
-            x: dropResult.x - monitor.getInitialClientOffset().x + draggedItem.originalPosition.x,
-            y: dropResult.y - monitor.getInitialClientOffset().y + draggedItem.originalPosition.y
+            x: Math.max(0, itemPosition.x + deltaX),
+            y: Math.max(0, itemPosition.y + deltaY)
           };
+          
+          // Make sure item doesn't go out of bounds
+          const dimensions = gridDimensions?.();
+          if (dimensions) {
+            if (newPosition.x > dimensions.width - 100) {
+              newPosition.x = dimensions.width - 100;
+            }
+            if (newPosition.y > dimensions.height - 100) {
+              newPosition.y = dimensions.height - 100;
+            }
+          }
           
           setItemPosition(newPosition);
           if (onPositionChange) {
@@ -81,7 +122,34 @@ const BookmarkItem = ({
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging()
     })
-  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode]);
+  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder]);
+
+  // For dropping items into folders
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: ['BOOKMARK_ITEM', 'MULTI_BOOKMARK_ITEMS'],
+    canDrop: (droppedItem) => {
+      // Only allow dropping into folders, not into items
+      return isFolder && droppedItem.id !== item.id;
+    },
+    drop: (droppedItem) => {
+      if (isFolder) {
+        if (droppedItem.type === 'MULTI_BOOKMARK_ITEMS') {
+          // Multiple items being dropped into this folder
+          return { 
+            folderId: item.id,
+            multiple: true
+          };
+        } else {
+          // Single item dropped into this folder
+          return { folderId: item.id };
+        }
+      }
+    },
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+      canDrop: !!monitor.canDrop()
+    })
+  }), [isFolder, item.id]);
 
   useEffect(() => {
     const loadIconData = async () => {
@@ -167,9 +235,18 @@ const BookmarkItem = ({
     onContextMenu(e, item);
   };
 
+  // Combine the drag and drop refs for folder items
+  const itemDragRef = (el) => {
+    drag(el);
+    itemRef.current = el;
+    if (isFolder) {
+      drop(el);
+    }
+  };
+
   return (
     <Paper
-      ref={drag}
+      ref={itemDragRef}
       elevation={2}
       sx={{
         width: 90,
@@ -191,13 +268,22 @@ const BookmarkItem = ({
         top: isDesktopView ? `${itemPosition.y}px` : 'auto',
         backgroundColor: isSelected 
           ? (darkMode ? 'rgba(144, 202, 249, 0.16)' : 'rgba(25, 118, 210, 0.08)')
-          : (isFolder 
-            ? (darkMode ? '#333333' : '#f5f5f5') 
-            : (darkMode ? '#2d2d2d' : '#fff')),
-        border: isSelected ? `2px solid ${darkMode ? '#90caf9' : '#1976d2'}` : 'none',
+          : isFolder && isOver && canDrop 
+            ? (darkMode ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.1)') // Highlight when can drop
+            : (isFolder 
+              ? (darkMode ? '#333333' : '#f5f5f5') 
+              : (darkMode ? '#2d2d2d' : '#fff')),
+        border: isSelected 
+          ? `2px solid ${darkMode ? '#90caf9' : '#1976d2'}`
+          : isFolder && isOver && canDrop
+            ? `2px dashed ${darkMode ? '#4caf50' : '#2e7d32'}`
+            : 'none',
+        zIndex: isOver && canDrop ? 10 : isHovering ? 5 : 1
       }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
     >
       {isMultiSelectMode && (
         <Box 
@@ -225,9 +311,25 @@ const BookmarkItem = ({
         display: 'flex', 
         justifyContent: 'center', 
         mb: 1,
-        height: 40
+        height: 40,
+        position: 'relative'
       }}>
-        {getIconDisplay()}
+        {isFolder && isOver && canDrop ? (
+          <Badge
+            sx={{
+              '& .MuiBadge-badge': {
+                backgroundColor: darkMode ? '#4caf50' : '#2e7d32',
+                color: 'white'
+              }
+            }}
+            badgeContent="+"
+            color="primary"
+          >
+            {getIconDisplay()}
+          </Badge>
+        ) : (
+          getIconDisplay()
+        )}
       </Box>
       
       <Typography 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { ThemeProvider, createTheme, CssBaseline, Box, useMediaQuery } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, Alert, Snackbar } from '@mui/material';
 import BookmarkGrid from '../components/BookmarkGrid';
 import NavigationBar from '../components/NavigationBar';
 import SearchBar from '../components/SearchBar';
@@ -27,7 +27,12 @@ import {
   getSavedPositions,
   savePositions,
   uploadCustomIcon,
-  getCustomIcon
+  getCustomIcon,
+  moveBookmark,
+  getClipboardData,
+  saveToClipboard,
+  clearClipboard,
+  cloneBookmark
 } from '../utils/bookmarkUtils';
 
 // Material UI icons for the context menu
@@ -41,7 +46,9 @@ import {
   ContentPaste as PasteIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  SelectAll as SelectAllIcon
+  SelectAll as SelectAllIcon,
+  DragIndicator as DragIcon,
+  AddCircleOutline as NewFolderIcon
 } from '@mui/icons-material';
 
 // Create darkMode-aware theme
@@ -101,6 +108,13 @@ const App = () => {
   const [renameDialog, setRenameDialog] = useState({ open: false, item: null });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, items: [] });
   const [iconDialog, setIconDialog] = useState({ open: false, item: null });
+  
+  // Feedback notifications
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState({
@@ -196,6 +210,25 @@ const App = () => {
       console.error('Error loading bookmarks:', error);
     }
   };
+
+  // Method to refresh the current folder view
+  const refreshCurrentFolder = useCallback(async () => {
+    if (!currentFolder) return;
+    
+    try {
+      // Get fresh bookmark data
+      const bookmarkTree = await getAllBookmarks();
+      const flatBookmarks = flatten(bookmarkTree);
+      const updatedFolder = flatBookmarks.find(b => b.id === currentFolder.id);
+      
+      if (updatedFolder) {
+        setCurrentFolder(updatedFolder);
+        setBookmarks(updatedFolder.children || []);
+      }
+    } catch (error) {
+      console.error('Error refreshing folder:', error);
+    }
+  }, [currentFolder]);
 
   // Navigate to a folder with proper history handling
   const navigateTo = (folder, resetHistory = false) => {
@@ -349,6 +382,29 @@ const App = () => {
     savePositions(newPositions);
   };
 
+  // Handle dropping items into folders
+  const handleDropInFolder = async (itemIds, targetFolderId) => {
+    if (!itemIds.length || !targetFolderId) return;
+    
+    try {
+      for (const id of itemIds) {
+        await moveBookmark(id, { parentId: targetFolderId });
+      }
+      
+      showSnackbar('Items moved successfully', 'success');
+      refreshCurrentFolder();
+    } catch (error) {
+      console.error('Error moving items to folder:', error);
+      showSnackbar('Error moving items', 'error');
+    }
+  };
+
+  // Handle multi-selection drag and drop
+  const handleMultiSelectionDrop = (items, targetFolderId) => {
+    if (!items.length || !targetFolderId) return;
+    handleDropInFolder(items.map(item => item.id), targetFolderId);
+  };
+
   // Arrange items in a grid in desktop view
   const generateGridPositions = (items, containerWidth, containerHeight) => {
     const positions = {};
@@ -398,6 +454,15 @@ const App = () => {
     }
   }, [isDesktopView, bookmarks.length]);
 
+  // Show snackbar notification
+  const showSnackbar = (message, severity = 'info') => {
+    setSnackbar({
+      open: true,
+      message,
+      severity
+    });
+  };
+
   // Handle creating a new folder
   const handleCreateFolder = async (folderName) => {
     if (!folderName) return;
@@ -406,86 +471,217 @@ const App = () => {
       // Check folder depth limit (max 5 levels)
       const depth = await calculateFolderDepth(currentFolder.id);
       if (depth >= 5) {
-        alert('Maximum folder depth (5) reached. Cannot create more subfolders at this level.');
+        showSnackbar('Maximum folder depth (5) reached. Cannot create more subfolders at this level.', 'error');
         return;
       }
 
       await createFolder(currentFolder.id, folderName);
+      showSnackbar(`Folder '${folderName}' created`, 'success');
       
       // Close the dialog and refresh the view
       setCreateFolderDialog(false);
-      
-      // Reload bookmarks and maintain the current folder
-      getAllBookmarks().then(bookmarkTree => {
-        const flatBookmarks = flatten(bookmarkTree);
-        const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-        if (updatedFolder) {
-          setCurrentFolder(updatedFolder);
-          setBookmarks(updatedFolder.children || []);
-        }
-      });
+      refreshCurrentFolder();
     } catch (error) {
       console.error('Error creating folder:', error);
+      showSnackbar('Error creating folder', 'error');
     }
+  };
+
+  // Handle clipboard operations (cut/copy)
+  const handleClipboardOperation = async (items, operation) => {
+    if (!items.length) return;
+    
+    try {
+      await saveToClipboard(
+        items.map(item => item.id),
+        operation
+      );
+      
+      showSnackbar(
+        `${items.length} item${items.length > 1 ? 's' : ''} ${operation === 'cut' ? 'cut' : 'copied'} to clipboard`,
+        'info'
+      );
+      
+      // If in multi-select mode, clear selection after operation
+      if (isMultiSelectMode) {
+        setIsMultiSelectMode(false);
+        setSelectedItems([]);
+      }
+    } catch (error) {
+      console.error(`Error in ${operation} operation:`, error);
+      showSnackbar(`Error ${operation === 'cut' ? 'cutting' : 'copying'} items`, 'error');
+    }
+  };
+
+  // Handle paste operation
+  const handlePaste = async () => {
+    try {
+      const clipboardData = await getClipboardData();
+      
+      if (!clipboardData || !clipboardData.items || !clipboardData.items.length) {
+        showSnackbar('Nothing to paste', 'info');
+        return;
+      }
+      
+      const { items, operation } = clipboardData;
+      
+      if (operation === 'cut') {
+        // Move items to current folder
+        for (const id of items) {
+          await moveBookmark(id, { parentId: currentFolder.id });
+        }
+        // Clear clipboard after cut operation is completed
+        await clearClipboard();
+        showSnackbar('Items moved here', 'success');
+      } else if (operation === 'copy') {
+        // Clone items to current folder
+        for (const id of items) {
+          await cloneBookmark(id, currentFolder.id);
+        }
+        showSnackbar('Items copied here', 'success');
+      }
+      
+      // Refresh the current folder view
+      refreshCurrentFolder();
+    } catch (error) {
+      console.error('Error pasting items:', error);
+      showSnackbar('Error pasting items', 'error');
+    }
+  };
+
+  // Generate context menu based on selection state
+  const generateContextMenu = (item, isMultiSelectModeActive, selectedItemsArray) => {
+    const isFolder = !item.url;
+    const isSelected = selectedItemsArray.some(selected => selected.id === item.id);
+    const hasSelection = selectedItemsArray.length > 0;
+    
+    // If in multi-select mode, show specific menu
+    if (isMultiSelectModeActive) {
+      return [
+        {
+          label: isSelected ? 'Deselect' : 'Select',
+          icon: <SelectAllIcon fontSize="small" />,
+          onClick: () => handleToggleSelect(item)
+        },
+        ...(hasSelection ? [
+          { divider: true },
+          {
+            label: `Cut ${selectedItemsArray.length} item${selectedItemsArray.length > 1 ? 's' : ''}`,
+            icon: <CutIcon fontSize="small" />,
+            onClick: () => handleClipboardOperation(selectedItemsArray, 'cut')
+          },
+          {
+            label: `Copy ${selectedItemsArray.length} item${selectedItemsArray.length > 1 ? 's' : ''}`,
+            icon: <CopyIcon fontSize="small" />,
+            onClick: () => handleClipboardOperation(selectedItemsArray, 'copy')
+          },
+          {
+            label: `Delete ${selectedItemsArray.length} item${selectedItemsArray.length > 1 ? 's' : ''}`,
+            icon: <DeleteIcon fontSize="small" />,
+            onClick: () => setDeleteDialog({ open: true, items: selectedItemsArray })
+          }
+        ] : [])
+      ];
+    }
+    
+    // Regular context menu options
+    return [
+      {
+        label: isFolder ? 'Open Folder' : 'Open Bookmark',
+        icon: <OpenIcon fontSize="small" />,
+        onClick: () => {
+          if (item.url) {
+            window.open(item.url, '_blank');
+          } else {
+            navigateTo(item);
+          }
+        }
+      },
+      { divider: true },
+      {
+        label: 'Rename',
+        icon: <RenameIcon fontSize="small" />,
+        onClick: () => setRenameDialog({ open: true, item })
+      },
+      {
+        label: 'Cut',
+        icon: <CutIcon fontSize="small" />,
+        onClick: () => handleClipboardOperation([item], 'cut')
+      },
+      {
+        label: 'Copy',
+        icon: <CopyIcon fontSize="small" />,
+        onClick: () => handleClipboardOperation([item], 'copy')
+      },
+      {
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => setDeleteDialog({ open: true, items: [item] })
+      },
+      { divider: true },
+      {
+        label: 'Change Icon',
+        icon: <IconIcon fontSize="small" />,
+        onClick: () => setIconDialog({ open: true, item })
+      }
+    ];
   };
 
   // Handle right-click on bookmark/folder
   const handleContextMenu = (e, item) => {
     e.preventDefault();
     
-    const isFolder = !item.url;
+    const menuItems = generateContextMenu(item, isMultiSelectMode, selectedItems);
     
-    let menuItems = [];
-    
-    if (isMultiSelectMode) {
-      // In multi-select mode, show toggle selection option
-      const isSelected = selectedItems.some(selected => selected.id === item.id);
-      menuItems = [
-        {
-          label: isSelected ? 'Deselect' : 'Select',
-          icon: <SelectAllIcon fontSize="small" />,
-          onClick: () => handleToggleSelect(item)
-        }
-      ];
-    } else {
-      // Regular context menu options
-      menuItems = [
-        {
-          label: isFolder ? 'Open Folder' : 'Open Bookmark',
-          icon: <OpenIcon fontSize="small" />,
-          onClick: () => {
-            if (item.url) {
-              window.open(item.url, '_blank');
-            } else {
-              navigateTo(item);
-            }
-          }
-        },
-        { divider: true },
-        {
-          label: 'Rename',
-          icon: <RenameIcon fontSize="small" />,
-          onClick: () => setRenameDialog({ open: true, item })
-        },
-        {
-          label: 'Delete',
-          icon: <DeleteIcon fontSize="small" />,
-          onClick: () => setDeleteDialog({ open: true, items: [item] })
-        },
-        { divider: true },
-        {
-          label: 'Change Icon',
-          icon: <IconIcon fontSize="small" />,
-          onClick: () => setIconDialog({ open: true, item })
-        }
-      ];
-    }
-
     setContextMenu({
       visible: true,
       x: e.clientX,
       y: e.clientY,
       item,
+      menuItems
+    });
+  };
+
+  // Handle right-click on empty space (background)
+  const handleBackgroundContextMenu = (e) => {
+    e.preventDefault();
+    
+    // Only show background context menu in the current folder view (not search)
+    if (isSearchMode) return;
+    
+    const menuItems = [
+      {
+        label: 'Paste',
+        icon: <PasteIcon fontSize="small" />,
+        onClick: handlePaste
+      },
+      { divider: true },
+      {
+        label: 'New Folder',
+        icon: <NewFolderIcon fontSize="small" />,
+        onClick: () => setCreateFolderDialog(true)
+      },
+      {
+        label: 'Select All',
+        icon: <SelectAllIcon fontSize="small" />,
+        onClick: () => {
+          setIsMultiSelectMode(true);
+          setSelectedItems(bookmarks);
+        }
+      },
+      { divider: true },
+      {
+        label: darkMode ? 'Light Mode' : 'Dark Mode',
+        icon: darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />,
+        onClick: handleToggleDarkMode
+      }
+    ];
+    
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      item: null,
       menuItems
     });
   };
@@ -496,26 +692,19 @@ const App = () => {
     
     try {
       if (newName.length > 50) {
-        alert('Name is too long. Maximum 50 characters allowed.');
+        showSnackbar('Name is too long. Maximum 50 characters allowed.', 'error');
         return;
       }
       
       await updateBookmark(item.id, { title: newName });
+      showSnackbar(`Renamed to '${newName}'`, 'success');
       
       // Close the dialog
       setRenameDialog({ open: false, item: null });
-      
-      // Reload the current folder to reflect changes
-      getAllBookmarks().then(bookmarkTree => {
-        const flatBookmarks = flatten(bookmarkTree);
-        const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-        if (updatedFolder) {
-          setCurrentFolder(updatedFolder);
-          setBookmarks(updatedFolder.children || []);
-        }
-      });
+      refreshCurrentFolder();
     } catch (error) {
       console.error('Error renaming item:', error);
+      showSnackbar('Error renaming item', 'error');
     }
   };
 
@@ -531,30 +720,20 @@ const App = () => {
         }
       }
       
+      showSnackbar(`${items.length} item${items.length > 1 ? 's' : ''} deleted`, 'success');
+      
       // Close the dialog
       setDeleteDialog({ open: false, items: [] });
       
       // Clear selection
       setSelectedItems([]);
+      setIsMultiSelectMode(false);
       
-      // Reload the current folder to reflect changes
-      getAllBookmarks().then(bookmarkTree => {
-        const flatBookmarks = flatten(bookmarkTree);
-        const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-        if (updatedFolder) {
-          setCurrentFolder(updatedFolder);
-          setBookmarks(updatedFolder.children || []);
-        }
-      });
+      // Refresh the current folder
+      refreshCurrentFolder();
     } catch (error) {
       console.error('Error deleting items:', error);
-    }
-  };
-
-  // Handle deleting selected items
-  const handleDeleteSelected = () => {
-    if (selectedItems.length > 0) {
-      setDeleteDialog({ open: true, items: selectedItems });
+      showSnackbar('Error deleting items', 'error');
     }
   };
 
@@ -569,20 +748,14 @@ const App = () => {
         await setCustomIcon(item.id, iconSelection);
       }
       
+      showSnackbar('Icon updated', 'success');
+      
       // Close the dialog
       setIconDialog({ open: false, item: null });
-      
-      // Reload the current folder to reflect changes
-      getAllBookmarks().then(bookmarkTree => {
-        const flatBookmarks = flatten(bookmarkTree);
-        const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-        if (updatedFolder) {
-          setCurrentFolder(updatedFolder);
-          setBookmarks(updatedFolder.children || []);
-        }
-      });
+      refreshCurrentFolder();
     } catch (error) {
       console.error('Error changing icon:', error);
+      showSnackbar('Error updating icon', 'error');
     }
   };
 
@@ -590,7 +763,10 @@ const App = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <DndProvider backend={HTML5Backend}>
-        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Box 
+          sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
+          onContextMenu={handleBackgroundContextMenu}
+        >
           <NavigationBar 
             breadcrumbs={breadcrumbs} 
             onNavigate={navigateTo}
@@ -610,23 +786,29 @@ const App = () => {
           
           <Toolbar 
             onCreateFolder={() => setCreateFolderDialog(true)} 
-            onRefresh={() => {
-              // Reload the current folder
-              getAllBookmarks().then(bookmarkTree => {
-                const flatBookmarks = flatten(bookmarkTree);
-                const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-                if (updatedFolder) {
-                  setCurrentFolder(updatedFolder);
-                  setBookmarks(updatedFolder.children || []);
-                }
-              });
-            }}
+            onRefresh={refreshCurrentFolder}
             isDesktopView={isDesktopView}
             onToggleView={handleToggleView}
             isMultiSelectMode={isMultiSelectMode}
             onToggleMultiSelect={handleToggleMultiSelect}
             selectedCount={selectedItems.length}
-            onDeleteSelected={handleDeleteSelected}
+            onDeleteSelected={() => {
+              if (selectedItems.length > 0) {
+                setDeleteDialog({ open: true, items: selectedItems });
+              }
+            }}
+            onCutSelected={() => {
+              if (selectedItems.length > 0) {
+                handleClipboardOperation(selectedItems, 'cut');
+              }
+            }}
+            onCopySelected={() => {
+              if (selectedItems.length > 0) {
+                handleClipboardOperation(selectedItems, 'copy');
+              }
+            }}
+            onPaste={handlePaste}
+            darkMode={darkMode}
           />
           
           <BookmarkGrid 
@@ -634,16 +816,7 @@ const App = () => {
             currentFolder={currentFolder}
             onNavigate={navigateTo}
             onContextMenu={handleContextMenu}
-            onRefresh={() => {
-              getAllBookmarks().then(bookmarkTree => {
-                const flatBookmarks = flatten(bookmarkTree);
-                const updatedFolder = findFullFolder(flatBookmarks, currentFolder.id);
-                if (updatedFolder) {
-                  setCurrentFolder(updatedFolder);
-                  setBookmarks(updatedFolder.children || []);
-                }
-              });
-            }}
+            onRefresh={refreshCurrentFolder}
             isDesktopView={isDesktopView}
             itemPositions={itemPositions}
             onItemPositionChange={handleItemPositionChange}
@@ -651,7 +824,25 @@ const App = () => {
             selectedItems={selectedItems}
             onToggleSelect={handleToggleSelect}
             darkMode={darkMode}
+            onDropInFolder={handleDropInFolder}
           />
+          
+          {/* Feedback notifications */}
+          <Snackbar
+            open={snackbar.open}
+            autoHideDuration={3000}
+            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          >
+            <Alert 
+              onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+              severity={snackbar.severity}
+              variant="filled"
+              sx={{ width: '100%' }}
+            >
+              {snackbar.message}
+            </Alert>
+          </Snackbar>
           
           <ContextMenu 
             anchorPosition={{ x: contextMenu.x, y: contextMenu.y }}

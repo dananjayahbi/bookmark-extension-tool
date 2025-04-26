@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { Box, Grid, Paper } from '@mui/material';
 import BookmarkItem from './BookmarkItem';
@@ -15,31 +15,52 @@ const BookmarkGrid = ({
   isMultiSelectMode,
   selectedItems,
   onToggleSelect,
-  darkMode
+  darkMode,
+  onDropInFolder
 }) => {
   const [gridRef, setGridRef] = useState(null);
+  const gridContainerRef = useRef(null);
   
   // Desktop area drop handler
   const [{ isOver }, drop] = useDrop(() => ({
-    accept: 'BOOKMARK_ITEM',
+    accept: ['BOOKMARK_ITEM', 'MULTI_BOOKMARK_ITEMS'],
     drop: (item, monitor) => {
       if (isDesktopView) {
-        return {
-          desktop: true,
-          x: monitor.getClientOffset().x,
-          y: monitor.getClientOffset().y
-        };
+        if (item.type === 'MULTI_BOOKMARK_ITEMS') {
+          // Handle multiple items being dragged
+          const dropOffset = monitor.getClientOffset();
+          const initialOffset = monitor.getInitialClientOffset();
+          const initialSourceOffset = monitor.getInitialSourceClientOffset();
+          
+          // Calculate the drop position for each item
+          return {
+            desktop: true,
+            multiple: true,
+            items: item.items,
+            dropOffset,
+            initialOffset,
+            initialSourceOffset
+          };
+        } else {
+          // Single item drag
+          return {
+            desktop: true,
+            x: monitor.getClientOffset().x,
+            y: monitor.getClientOffset().y
+          };
+        }
       }
     },
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     })
-  }), [isDesktopView]);
+  }), [isDesktopView, selectedItems]);
 
   // Set ref for drop area
   const setRef = (ref) => {
     setGridRef(ref);
     drop(ref);
+    gridContainerRef.current = ref;
   };
 
   // Handle double click on a bookmark
@@ -54,6 +75,20 @@ const BookmarkGrid = ({
   // Check if an item is selected
   const isItemSelected = (item) => {
     return selectedItems && selectedItems.some(selected => selected.id === item.id);
+  };
+
+  // Get grid dimensions for calculations
+  const getGridDimensions = () => {
+    if (gridContainerRef.current) {
+      const rect = gridContainerRef.current.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left
+      };
+    }
+    return null;
   };
 
   return (
@@ -88,6 +123,8 @@ const BookmarkGrid = ({
             isSelected={isItemSelected(item)}
             onToggleSelect={onToggleSelect}
             darkMode={darkMode}
+            gridDimensions={getGridDimensions}
+            onDropInFolder={onDropInFolder}
           />
         ))
       ) : (
@@ -104,6 +141,7 @@ const BookmarkGrid = ({
                 isSelected={isItemSelected(item)}
                 onToggleSelect={onToggleSelect}
                 darkMode={darkMode}
+                onDropInFolder={onDropInFolder}
               />
             </Grid>
           ))}
