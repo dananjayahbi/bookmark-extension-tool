@@ -45,7 +45,9 @@ const BookmarkItem = ({
   onToggleSelect,
   darkMode = false,
   gridDimensions,
-  onDropInFolder
+  onDropInFolder,
+  index,
+  moveItem
 }) => {
   const [customIcon, setCustomIcon] = useState(null);
   const [customIconData, setCustomIconData] = useState(null);
@@ -66,79 +68,84 @@ const BookmarkItem = ({
           type: 'MULTI_BOOKMARK_ITEMS',
           id: item.id, // Keep individual ID for compatibility
           isFolder,
+          index,
           position: itemPosition,
           originalPosition: itemPosition
         };
       }
       return { 
         id: item.id, 
-        isFolder, 
+        isFolder,
+        index,
         position: itemPosition,
         originalPosition: itemPosition
       };
     },
     canDrag: !isMultiSelectMode || isSelected, // Can drag in multi-select mode only if selected
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging()
+    }),
     end: (draggedItem, monitor) => {
       const dropResult = monitor.getDropResult();
       
-      if (dropResult) {
-        if (dropResult.folderId && onDropInFolder) {
-          // Item was dropped into a folder
-          if (isSelected && isMultiSelectMode) {
-            // This is a multi-selection drop, let the parent component handle it
-            window.postMessage({
-              type: 'MULTI_ITEM_DROP',
-              targetFolderId: dropResult.folderId
-            }, '*');
-          } else {
-            // Single item drop
-            onDropInFolder([draggedItem.id], dropResult.folderId);
-          }
-        }
-        else if (dropResult.desktop && isDesktopView) {
-          // Calculate new position for desktop view
-          if (dropResult.multiple) {
-            // Part of multi-drop (handled by parent component)
-            return;
-          }
-          
-          // Individual item position update
-          const deltaX = dropResult.x - monitor.getInitialClientOffset().x;
-          const deltaY = dropResult.y - monitor.getInitialClientOffset().y;
-          
-          const newPosition = { 
-            x: Math.max(0, itemPosition.x + deltaX),
-            y: Math.max(0, itemPosition.y + deltaY)
-          };
-          
-          // Make sure item doesn't go out of bounds
-          const dimensions = gridDimensions?.();
-          if (dimensions) {
-            if (newPosition.x > dimensions.width - 100) {
-              newPosition.x = dimensions.width - 100;
-            }
-            if (newPosition.y > dimensions.height - 100) {
-              newPosition.y = dimensions.height - 100;
-            }
-          }
-          
-          setItemPosition(newPosition);
-          if (onPositionChange) {
-            onPositionChange(item.id, newPosition);
-          }
+      if (!dropResult) {
+        return;
+      }
+      
+      if (dropResult.folderId && onDropInFolder) {
+        // Item was dropped into a folder
+        if (isSelected && isMultiSelectMode) {
+          // This is a multi-selection drop, let the parent component handle it
+          window.postMessage({
+            type: 'MULTI_ITEM_DROP',
+            targetFolderId: dropResult.folderId
+          }, '*');
+        } else {
+          // Single item drop
+          onDropInFolder([draggedItem.id], dropResult.folderId);
         }
       }
-    },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging()
-    })
-  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder]);
+      else if (dropResult.desktop && isDesktopView) {
+        // Calculate new position for desktop view
+        if (dropResult.multiple) {
+          // Part of multi-drop (handled by parent component)
+          return;
+        }
+        
+        // Individual item position update
+        const deltaX = dropResult.x - monitor.getInitialClientOffset().x;
+        const deltaY = dropResult.y - monitor.getInitialClientOffset().y;
+        
+        const newPosition = { 
+          x: Math.max(0, itemPosition.x + deltaX),
+          y: Math.max(0, itemPosition.y + deltaY)
+        };
+        
+        // Make sure item doesn't go out of bounds
+        const dimensions = gridDimensions?.();
+        if (dimensions) {
+          if (newPosition.x > dimensions.width - 100) {
+            newPosition.x = dimensions.width - 100;
+          }
+          if (newPosition.y > dimensions.height - 100) {
+            newPosition.y = dimensions.height - 100;
+          }
+        }
+        
+        setItemPosition(newPosition);
+        if (onPositionChange) {
+          onPositionChange(item.id, newPosition);
+        }
+      }
+    }
+  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index]);
 
   // For dropping items into folders
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ['BOOKMARK_ITEM', 'MULTI_BOOKMARK_ITEMS'],
     canDrop: (droppedItem) => {
       // Only allow dropping into folders, not into items
+      // And prevent dropping onto itself
       return isFolder && droppedItem.id !== item.id;
     },
     drop: (droppedItem) => {
@@ -160,6 +167,69 @@ const BookmarkItem = ({
       canDrop: !!monitor.canDrop()
     })
   }), [isFolder, item.id]);
+
+  // For reordering in grid view
+  const [, dropReorder] = useDrop(() => ({
+    accept: 'BOOKMARK_ITEM',
+    canDrop: (droppedItem) => {
+      // Prevent dropping onto itself
+      return droppedItem.id !== item.id && !isDesktopView;
+    },
+    hover: (droppedItem, monitor) => {
+      if (!itemRef.current || droppedItem.id === item.id) {
+        return;
+      }
+      
+      // Don't trigger in desktop view
+      if (isDesktopView) {
+        return;
+      }
+      
+      const dragIndex = droppedItem.index;
+      const hoverIndex = index;
+      
+      // Don't replace items with themselves
+      if (dragIndex === hoverIndex) {
+        return;
+      }
+      
+      // Only perform the move when the mouse has crossed half of the item's height/width
+      const hoverBoundingRect = itemRef.current.getBoundingClientRect();
+      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
+      const hoverMiddleX = (hoverBoundingRect.right - hoverBoundingRect.left) / 2;
+      
+      const clientOffset = monitor.getClientOffset();
+      const hoverClientY = clientOffset.y - hoverBoundingRect.top;
+      const hoverClientX = clientOffset.x - hoverBoundingRect.left;
+      
+      // Dragging downwards/rightwards
+      if (dragIndex < hoverIndex && 
+          (hoverClientY < hoverMiddleY || hoverClientX < hoverMiddleX)) {
+        return;
+      }
+      
+      // Dragging upwards/leftwards
+      if (dragIndex > hoverIndex && 
+          (hoverClientY > hoverMiddleY || hoverClientX > hoverMiddleX)) {
+        return;
+      }
+      
+      // Time to actually perform the action
+      if (moveItem) {
+        moveItem(dragIndex, hoverIndex, droppedItem.id, item.id);
+      }
+      
+      // Note: we're mutating the monitor item here!
+      // Generally it's better to avoid mutations,
+      // but it's good here for the sake of performance
+      // to avoid expensive index searches.
+      droppedItem.index = hoverIndex;
+    },
+    collect: (monitor) => ({
+      isReorderOver: !!monitor.isOver(),
+      canReorderDrop: !!monitor.canDrop()
+    })
+  }), [index, isDesktopView, moveItem, item.id]);
 
   useEffect(() => {
     const loadIconData = async () => {
@@ -245,12 +315,15 @@ const BookmarkItem = ({
     onContextMenu(e, item);
   };
 
-  // Combine the drag and drop refs for folder items
+  // Combine all the drag and drop refs for folders and grid reordering
   const itemDragRef = (el) => {
     drag(el);
     itemRef.current = el;
     if (isFolder) {
       drop(el);
+    }
+    if (!isDesktopView) {
+      dropReorder(el);
     }
   };
 
@@ -288,7 +361,7 @@ const BookmarkItem = ({
           : isFolder && isOver && canDrop
             ? `2px dashed ${darkMode ? '#4caf50' : '#2e7d32'}`
             : 'none',
-        zIndex: isOver && canDrop ? 10 : isHovering ? 5 : 1
+        zIndex: isOver && canDrop ? 10 : isDragging ? 100 : isHovering ? 5 : 1
       }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}

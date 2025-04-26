@@ -834,6 +834,32 @@ const App = () => {
     };
   }, [selectedItems, handleDropInFolder]);
 
+  // Handle reordering of bookmarks
+  const handleReorderItems = async (dragId, hoverId, dragIndex, hoverIndex) => {
+    try {
+      // Get the items being reordered
+      const draggedItem = bookmarks.find(item => item.id === dragId);
+      const targetItem = bookmarks.find(item => item.id === hoverId);
+
+      if (!draggedItem || !targetItem) return;
+
+      // Calculate the index to insert the draggedItem at
+      // If moving right, insert after the target; if moving left, insert before
+      const insertIndex = dragIndex < hoverIndex ? 
+        parseInt(targetItem.index) + 1 : // After target
+        parseInt(targetItem.index);      // Before target
+
+      // Move the bookmark using Chrome API
+      await moveBookmark(draggedItem.id, { parentId: currentFolder.id, index: insertIndex });
+      
+      // Refresh the current folder to reflect changes
+      refreshCurrentFolder();
+    } catch (error) {
+      console.error('Error reordering bookmarks:', error);
+      showSnackbar('Error reordering bookmarks', 'error');
+    }
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -900,6 +926,7 @@ const App = () => {
             onToggleSelect={handleToggleSelect}
             darkMode={darkMode}
             onDropInFolder={handleDropInFolder}
+            onReorderItems={handleReorderItems}
           />
           
           {/* Feedback notifications */}

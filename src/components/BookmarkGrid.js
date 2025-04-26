@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDrop } from 'react-dnd';
 import { Box, Grid, Paper } from '@mui/material';
 import BookmarkItem from './BookmarkItem';
@@ -16,11 +16,18 @@ const BookmarkGrid = ({
   selectedItems,
   onToggleSelect,
   darkMode,
-  onDropInFolder
+  onDropInFolder,
+  onReorderItems
 }) => {
   const [gridRef, setGridRef] = useState(null);
   const gridContainerRef = useRef(null);
+  const [items, setItems] = useState([]);
   
+  // Initialize items state with bookmark data and indices
+  useEffect(() => {
+    setItems(bookmarks);
+  }, [bookmarks]);
+
   // Desktop area drop handler
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ['BOOKMARK_ITEM', 'MULTI_BOOKMARK_ITEMS'],
@@ -91,6 +98,30 @@ const BookmarkGrid = ({
     return null;
   };
 
+  // Handle reordering of items in grid view
+  const moveItem = useCallback((dragIndex, hoverIndex, dragId, hoverId) => {
+    if (dragIndex === hoverIndex) return;
+    
+    // Update local state to reflect the reorder immediately for smooth UI
+    setItems(prevItems => {
+      const updatedItems = [...prevItems];
+      const temp = updatedItems[dragIndex];
+      
+      // Remove the item from its original position
+      updatedItems.splice(dragIndex, 1);
+      
+      // Insert it at the new position
+      updatedItems.splice(hoverIndex, 0, temp);
+      
+      return updatedItems;
+    });
+    
+    // Update backend via parent component once drag is complete
+    if (onReorderItems) {
+      onReorderItems(dragId, hoverId, dragIndex, hoverIndex);
+    }
+  }, [onReorderItems]);
+
   return (
     <Box
       ref={setRef}
@@ -110,10 +141,11 @@ const BookmarkGrid = ({
     >
       {isDesktopView ? (
         // Desktop view (free position)
-        bookmarks.map((item) => (
+        items.map((item, index) => (
           <BookmarkItem
             key={item.id}
             item={item}
+            index={index}
             onOpen={handleOpen}
             onContextMenu={onContextMenu}
             isDesktopView={true}
@@ -125,15 +157,17 @@ const BookmarkGrid = ({
             darkMode={darkMode}
             gridDimensions={getGridDimensions}
             onDropInFolder={onDropInFolder}
+            moveItem={moveItem}
           />
         ))
       ) : (
         // Grid view
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          {bookmarks.map((item) => (
+          {items.map((item, index) => (
             <Grid item key={item.id}>
               <BookmarkItem
                 item={item}
+                index={index}
                 onOpen={handleOpen}
                 onContextMenu={onContextMenu}
                 isDesktopView={false}
@@ -142,6 +176,7 @@ const BookmarkGrid = ({
                 onToggleSelect={onToggleSelect}
                 darkMode={darkMode}
                 onDropInFolder={onDropInFolder}
+                moveItem={moveItem}
               />
             </Grid>
           ))}
