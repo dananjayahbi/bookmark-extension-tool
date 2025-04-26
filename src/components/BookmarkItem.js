@@ -61,9 +61,10 @@ const BookmarkItem = ({
     item: () => {
       if (isSelected && onDropInFolder) {
         // If this is part of a multi-selection, use special handler
+        // Get all selected item IDs from the parent component
         return {
           type: 'MULTI_BOOKMARK_ITEMS',
-          items: item.id,
+          id: item.id, // Keep individual ID for compatibility
           isFolder,
           position: itemPosition,
           originalPosition: itemPosition
@@ -83,7 +84,16 @@ const BookmarkItem = ({
       if (dropResult) {
         if (dropResult.folderId && onDropInFolder) {
           // Item was dropped into a folder
-          onDropInFolder([draggedItem.id], dropResult.folderId);
+          if (isSelected && isMultiSelectMode) {
+            // This is a multi-selection drop, let the parent component handle it
+            window.postMessage({
+              type: 'MULTI_ITEM_DROP',
+              targetFolderId: dropResult.folderId
+            }, '*');
+          } else {
+            // Single item drop
+            onDropInFolder([draggedItem.id], dropResult.folderId);
+          }
         }
         else if (dropResult.desktop && isDesktopView) {
           // Calculate new position for desktop view

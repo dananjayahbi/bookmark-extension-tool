@@ -296,21 +296,49 @@ const App = () => {
   };
 
   // Go back in history
-  const handleGoBack = () => {
+  const handleGoBack = async () => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const folder = navigationHistory[newIndex];
       
       setHistoryIndex(newIndex);
-      setCurrentFolder(folder);
-      setBookmarks(folder.children || []);
       
-      // Calculate breadcrumbs for this folder
-      getAllBookmarks().then(bookmarkTree => {
+      // Get fresh bookmark data instead of using cached data
+      try {
+        // Get fresh bookmark data
+        const bookmarkTree = await getAllBookmarks();
         const flatBookmarks = flatten(bookmarkTree);
-        const crumbs = buildBreadcrumbs(flatBookmarks, folder);
-        setBreadcrumbs(crumbs);
-      });
+        const updatedFolder = flatBookmarks.find(b => b.id === folder.id);
+        
+        if (updatedFolder) {
+          setCurrentFolder(updatedFolder);
+          setBookmarks(updatedFolder.children || []);
+          
+          // Calculate breadcrumbs for this folder
+          const crumbs = buildBreadcrumbs(flatBookmarks, updatedFolder);
+          setBreadcrumbs(crumbs);
+        } else {
+          // Fallback if folder not found
+          setCurrentFolder(folder);
+          setBookmarks(folder.children || []);
+          
+          // Calculate breadcrumbs for this folder
+          const crumbs = buildBreadcrumbs(flatBookmarks, folder);
+          setBreadcrumbs(crumbs);
+        }
+      } catch (error) {
+        console.error('Error refreshing folder:', error);
+        // Fallback to cached data
+        setCurrentFolder(folder);
+        setBookmarks(folder.children || []);
+        
+        // Calculate breadcrumbs for this folder using cached data
+        getAllBookmarks().then(bookmarkTree => {
+          const flatBookmarks = flatten(bookmarkTree);
+          const crumbs = buildBreadcrumbs(flatBookmarks, folder);
+          setBreadcrumbs(crumbs);
+        });
+      }
       
       // Clear search and multi-select
       setSearchQuery('');
@@ -321,21 +349,49 @@ const App = () => {
   };
 
   // Go forward in history
-  const handleGoForward = () => {
+  const handleGoForward = async () => {
     if (historyIndex < navigationHistory.length - 1) {
       const newIndex = historyIndex + 1;
       const folder = navigationHistory[newIndex];
       
       setHistoryIndex(newIndex);
-      setCurrentFolder(folder);
-      setBookmarks(folder.children || []);
       
-      // Calculate breadcrumbs for this folder
-      getAllBookmarks().then(bookmarkTree => {
+      // Get fresh bookmark data instead of using cached data
+      try {
+        // Get fresh bookmark data
+        const bookmarkTree = await getAllBookmarks();
         const flatBookmarks = flatten(bookmarkTree);
-        const crumbs = buildBreadcrumbs(flatBookmarks, folder);
-        setBreadcrumbs(crumbs);
-      });
+        const updatedFolder = flatBookmarks.find(b => b.id === folder.id);
+        
+        if (updatedFolder) {
+          setCurrentFolder(updatedFolder);
+          setBookmarks(updatedFolder.children || []);
+          
+          // Calculate breadcrumbs for this folder
+          const crumbs = buildBreadcrumbs(flatBookmarks, updatedFolder);
+          setBreadcrumbs(crumbs);
+        } else {
+          // Fallback if folder not found
+          setCurrentFolder(folder);
+          setBookmarks(folder.children || []);
+          
+          // Calculate breadcrumbs for this folder
+          const crumbs = buildBreadcrumbs(flatBookmarks, folder);
+          setBreadcrumbs(crumbs);
+        }
+      } catch (error) {
+        console.error('Error refreshing folder:', error);
+        // Fallback to cached data
+        setCurrentFolder(folder);
+        setBookmarks(folder.children || []);
+        
+        // Calculate breadcrumbs for this folder using cached data
+        getAllBookmarks().then(bookmarkTree => {
+          const flatBookmarks = flatten(bookmarkTree);
+          const crumbs = buildBreadcrumbs(flatBookmarks, folder);
+          setBreadcrumbs(crumbs);
+        });
+      }
       
       // Clear search and multi-select
       setSearchQuery('');
@@ -758,6 +814,25 @@ const App = () => {
       showSnackbar('Error updating icon', 'error');
     }
   };
+
+  // Listen for multi-item drop messages
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data && event.data.type === 'MULTI_ITEM_DROP') {
+        // Handle multi-item drop
+        const targetFolderId = event.data.targetFolderId;
+        if (selectedItems.length > 0 && targetFolderId) {
+          const itemIds = selectedItems.map(item => item.id);
+          handleDropInFolder(itemIds, targetFolderId);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [selectedItems, handleDropInFolder]);
 
   return (
     <ThemeProvider theme={theme}>
