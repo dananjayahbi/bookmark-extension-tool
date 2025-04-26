@@ -105,40 +105,61 @@ export const searchBookmarks = (query) => {
   });
 };
 
-// Get custom icon for a bookmark or folder
-export const getCustomIcon = (id) => {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([`icon_${id}`], (result) => {
-      resolve(result[`icon_${id}`] || null);
-    });
-  });
+// Get website favicon URL
+export const getBookmarkIconUrl = (url) => {
+  if (!url) return null;
+  try {
+    // Extract the domain from the URL
+    const domain = new URL(url).hostname;
+    // Google's favicon service
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  } catch (error) {
+    console.error('Error getting favicon:', error);
+    return null;
+  }
 };
 
-// Set custom icon for a bookmark or folder
-export const setCustomIcon = (id, iconName) => {
+// Upload and save a custom icon
+export const uploadCustomIcon = (id, iconData) => {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [`icon_${id}`]: iconName }, () => {
+    chrome.storage.local.set({
+      [`customIcon_${id}`]: iconData,
+      [`icon_${id}`]: 'custom' // Mark as using a custom icon
+    }, () => {
       resolve();
     });
   });
 };
 
-// Calculate folder depth (to enforce max depth of 5)
-export const calculateFolderDepth = async (folderId) => {
-  let depth = 0;
-  let currentId = folderId;
-  
-  while (currentId !== '0' && currentId !== '1') {
-    const bookmarks = await getAllBookmarks();
-    const folder = findBookmarkById(flatten(bookmarks), currentId);
-    
-    if (!folder || !folder.parentId) break;
-    
-    currentId = folder.parentId;
-    depth++;
-  }
-  
-  return depth;
+// Get custom icon or upload data
+export const getCustomIconData = (id) => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([`customIcon_${id}`, `icon_${id}`], (result) => {
+      if (result[`icon_${id}`] === 'custom') {
+        resolve(result[`customIcon_${id}`]);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+// Save view preference (desktop or grid)
+export const saveViewPreference = (isDesktopView) => {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ isDesktopView }, () => {
+      resolve();
+    });
+  });
+};
+
+// Get view preference (desktop or grid)
+export const getSavedViewPreference = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('isDesktopView', (result) => {
+      resolve(result.isDesktopView || false);
+    });
+  });
 };
 
 // Get saved positions for bookmark items in desktop view
@@ -154,45 +175,6 @@ export const getSavedPositions = () => {
 export const savePositions = (positions) => {
   return new Promise((resolve) => {
     chrome.storage.local.set({ itemPositions: positions }, () => {
-      resolve();
-    });
-  });
-};
-
-// Save view preference (desktop or grid)
-export const saveViewPreference = (isDesktopView) => {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ isDesktopView }, () => {
-      resolve();
-    });
-  });
-};
-
-// Get view preference (desktop or grid)
-export const getViewPreference = () => {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('isDesktopView', (result) => {
-      resolve(result.isDesktopView || false);
-    });
-  });
-};
-
-// Get navigation history
-export const getSavedNavigationHistory = () => {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['history', 'historyIndex'], (result) => {
-      resolve({
-        history: result.history || [],
-        historyIndex: result.historyIndex || -1
-      });
-    });
-  });
-};
-
-// Save navigation history
-export const saveNavigationHistory = (history, historyIndex) => {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ history, historyIndex }, () => {
       resolve();
     });
   });

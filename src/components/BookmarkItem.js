@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDrag } from 'react-dnd';
-import { getCustomIcon } from '../utils/bookmarkUtils';
-import { Paper, Typography, Box } from '@mui/material';
+import { getCustomIcon, getBookmarkIconUrl, getCustomIconData } from '../utils/bookmarkUtils';
+import { Paper, Typography, Box, Checkbox } from '@mui/material';
 import { 
   Folder as FolderIcon,
   Description as DescriptionIcon,
@@ -13,7 +13,9 @@ import {
   MusicNote as MusicIcon,
   ShoppingCart as ShoppingIcon,
   Flight as TravelIcon,
-  School as EducationIcon
+  School as EducationIcon,
+  CheckBox as SelectedIcon,
+  CheckBoxOutlineBlank as UnselectedIcon
 } from '@mui/icons-material';
 
 // Predefined icon components with Material UI
@@ -37,9 +39,15 @@ const BookmarkItem = ({
   onContextMenu, 
   position,
   isDesktopView, 
-  onPositionChange
+  onPositionChange,
+  isMultiSelectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  darkMode = false
 }) => {
   const [customIcon, setCustomIcon] = useState(null);
+  const [customIconData, setCustomIconData] = useState(null);
+  const [faviconUrl, setFaviconUrl] = useState(null);
   const [itemPosition, setItemPosition] = useState(position || { x: 0, y: 0 });
   const isFolder = !item.url;
   
@@ -51,6 +59,7 @@ const BookmarkItem = ({
       position: itemPosition,
       originalPosition: itemPosition
     }),
+    canDrag: !isMultiSelectMode, // Disable dragging in multi-select mode
     end: (draggedItem, monitor) => {
       const dropResult = monitor.getDropResult();
       
@@ -72,16 +81,27 @@ const BookmarkItem = ({
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging()
     })
-  }), [item.id, itemPosition, isDesktopView]);
+  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode]);
 
   useEffect(() => {
-    const loadCustomIcon = async () => {
+    const loadIconData = async () => {
+      // Get custom icon type (from predefined list)
       const icon = await getCustomIcon(item.id);
       setCustomIcon(icon);
+      
+      // Get custom icon data (uploaded by user)
+      const iconData = await getCustomIconData(item.id);
+      setCustomIconData(iconData);
+      
+      // If it's a bookmark, also load the website favicon
+      if (item.url) {
+        const favicon = getBookmarkIconUrl(item.url);
+        setFaviconUrl(favicon);
+      }
     };
     
-    loadCustomIcon();
-  }, [item.id]);
+    loadIconData();
+  }, [item.id, item.url]);
 
   useEffect(() => {
     if (position) {
@@ -90,16 +110,55 @@ const BookmarkItem = ({
   }, [position]);
 
   const getIconDisplay = () => {
+    // If we have custom icon data (uploaded by user), show it
+    if (customIconData) {
+      return (
+        <Box 
+          component="img" 
+          sx={{ 
+            width: 32, 
+            height: 32, 
+            objectFit: 'contain'
+          }} 
+          src={customIconData} 
+          alt={item.title} 
+        />
+      );
+    }
+    
+    // If we have a predefined icon, show it
     if (customIcon && PREDEFINED_ICONS[customIcon]) {
       return PREDEFINED_ICONS[customIcon];
     }
     
+    // For bookmarks, show website favicon
+    if (!isFolder && faviconUrl) {
+      return (
+        <Box 
+          component="img" 
+          sx={{ 
+            width: 32, 
+            height: 32, 
+            objectFit: 'contain'
+          }} 
+          src={faviconUrl} 
+          alt={item.title} 
+        />
+      );
+    }
+    
+    // Default icons
     return isFolder ? PREDEFINED_ICONS.folder : PREDEFINED_ICONS.default;
   };
 
   const handleClick = (e) => {
     e.stopPropagation();
-    onOpen(item);
+    
+    if (isMultiSelectMode) {
+      onToggleSelect(item);
+    } else {
+      onOpen(item);
+    }
   };
 
   const handleContextMenu = (e) => {
@@ -120,24 +179,57 @@ const BookmarkItem = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '8px',
-        cursor: 'pointer',
+        cursor: isMultiSelectMode ? 'default' : 'pointer',
         opacity: isDragging ? 0.5 : 1,
         transition: 'transform 0.2s, box-shadow 0.2s',
         '&:hover': {
-          transform: 'scale(1.05)',
-          boxShadow: 3
+          transform: isMultiSelectMode ? 'none' : 'scale(1.05)',
+          boxShadow: isMultiSelectMode ? 3 : 4
         },
         position: isDesktopView ? 'absolute' : 'relative',
         left: isDesktopView ? `${itemPosition.x}px` : 'auto',
         top: isDesktopView ? `${itemPosition.y}px` : 'auto',
-        backgroundColor: isFolder ? '#f5f5f5' : '#fff'
+        backgroundColor: isSelected 
+          ? (darkMode ? 'rgba(144, 202, 249, 0.16)' : 'rgba(25, 118, 210, 0.08)')
+          : (isFolder 
+            ? (darkMode ? '#333333' : '#f5f5f5') 
+            : (darkMode ? '#2d2d2d' : '#fff')),
+        border: isSelected ? `2px solid ${darkMode ? '#90caf9' : '#1976d2'}` : 'none',
       }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
-      <Box sx={{ fontSize: 36, display: 'flex', justifyContent: 'center', mb: 1 }}>
+      {isMultiSelectMode && (
+        <Box 
+          sx={{ 
+            position: 'absolute', 
+            top: 4, 
+            left: 4,
+            zIndex: 2
+          }}
+        >
+          <Checkbox
+            size="small"
+            checked={isSelected}
+            onChange={() => onToggleSelect(item)}
+            color="primary"
+            icon={<UnselectedIcon fontSize="small" />}
+            checkedIcon={<SelectedIcon fontSize="small" />}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Box>
+      )}
+      
+      <Box sx={{ 
+        fontSize: 36, 
+        display: 'flex', 
+        justifyContent: 'center', 
+        mb: 1,
+        height: 40
+      }}>
         {getIconDisplay()}
       </Box>
+      
       <Typography 
         variant="caption" 
         align="center" 
@@ -145,7 +237,8 @@ const BookmarkItem = ({
         sx={{ 
           width: '100%',
           textOverflow: 'ellipsis',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          color: darkMode ? 'rgba(255, 255, 255, 0.7)' : 'inherit'
         }}
       >
         {item.title || (item.url ? new URL(item.url).hostname : 'Untitled')}
