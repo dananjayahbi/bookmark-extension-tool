@@ -1,0 +1,42 @@
+{
+  "name": "bookmark-extension-tool",
+  "version": "1.0.0",
+  "description": "Bookmark Desktop is a Chrome extension that transforms the new tab page into a desktop-like interface for managing browser bookmarks. It aims to provide an intuitive, visually appealing, and secure way to organize and access bookmarks, with both free and premium features to appeal to a diverse user base.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack --mode production && node generate-icons.js && npm run copy-assets",
+    "dev": "webpack --mode development --watch",
+    "tailwind:init": "tailwindcss init -p",
+    "generate-icons": "node generate-icons.js",
+    "copy-assets": "xcopy /E /I /Y public\\* dist\\"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.0.2",
+    "@mui/material": "^7.0.2",
+    "react": "^19.1.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "@babel/preset-react": "^7.26.3",
+    "@tailwindcss/postcss": "^4.1.4",
+    "autoprefixer": "^10.4.21",
+    "babel-loader": "^10.0.0",
+    "css-loader": "^7.1.2",
+    "postcss": "^8.5.3",
+    "postcss-loader": "^8.1.1",
+    "style-loader": "^4.0.0",
+    "tailwindcss": "^4.1.4",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^6.0.1"
+  }
+}
