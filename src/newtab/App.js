@@ -32,7 +32,9 @@ import {
   getClipboardData,
   saveToClipboard,
   clearClipboard,
-  cloneBookmark
+  cloneBookmark,
+  getIconSizePreference,
+  saveIconSizePreference
 } from '../utils/bookmarkUtils';
 
 // Material UI icons for the context menu
@@ -125,6 +127,9 @@ const App = () => {
     menuItems: []
   });
 
+  // State to store the icon size preference
+  const [iconSize, setIconSize] = useState('medium');
+
   // Load initial bookmarks and preferences
   useEffect(() => {
     loadBookmarks();
@@ -146,9 +151,19 @@ const App = () => {
       chrome.storage.local.get('darkMode', (result) => {
         setDarkMode(result.darkMode || false);
       });
+
+      // Load icon size preference
+      const size = await getIconSizePreference();
+      setIconSize(size);
     } catch (error) {
       console.error('Error loading preferences:', error);
     }
+  };
+
+  // Handle icon size change
+  const handleIconSizeChange = (size) => {
+    setIconSize(size);
+    saveIconSizePreference(size);
   };
 
   // Save dark mode preference
@@ -449,6 +464,12 @@ const App = () => {
       
       showSnackbar('Items moved successfully', 'success');
       refreshCurrentFolder();
+      
+      // Exit multi-select mode after move operation
+      if (isMultiSelectMode) {
+        setIsMultiSelectMode(false);
+        setSelectedItems([]);
+      }
     } catch (error) {
       console.error('Error moving items to folder:', error);
       showSnackbar('Error moving items', 'error');
@@ -464,8 +485,17 @@ const App = () => {
   // Arrange items in a grid in desktop view
   const generateGridPositions = (items, containerWidth, containerHeight) => {
     const positions = {};
-    const iconWidth = 100; // Width of icon with margins
-    const iconHeight = 120; // Height of icon with margins
+    // Get dimensions based on selected icon size
+    const sizeConfig = {
+      small: { width: 80, height: 90 },
+      medium: { width: 100, height: 120 },
+      large: { width: 130, height: 150 }
+    };
+    
+    const config = sizeConfig[iconSize] || sizeConfig.medium;
+    const iconWidth = config.width;
+    const iconHeight = config.height;
+    
     const maxPerRow = Math.floor(containerWidth / iconWidth);
     const startX = 20; // Left margin
     const startY = 20; // Top margin
@@ -832,7 +862,7 @@ const App = () => {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [selectedItems, handleDropInFolder]);
+  }, [selectedItems]);
 
   // Handle reordering of bookmarks
   const handleReorderItems = async (dragId, hoverId, dragIndex, hoverIndex) => {
@@ -851,6 +881,12 @@ const App = () => {
 
       // Move the bookmark using Chrome API
       await moveBookmark(draggedItem.id, { parentId: currentFolder.id, index: insertIndex });
+      
+      // Exit multi-select mode after reordering if active
+      if (isMultiSelectMode) {
+        setIsMultiSelectMode(false);
+        setSelectedItems([]);
+      }
       
       // Refresh the current folder to reflect changes
       refreshCurrentFolder();
@@ -910,6 +946,8 @@ const App = () => {
             }}
             onPaste={handlePaste}
             darkMode={darkMode}
+            iconSize={iconSize}
+            onIconSizeChange={handleIconSizeChange}
           />
           
           <BookmarkGrid 
@@ -927,6 +965,7 @@ const App = () => {
             darkMode={darkMode}
             onDropInFolder={handleDropInFolder}
             onReorderItems={handleReorderItems}
+            iconSize={iconSize}
           />
           
           {/* Feedback notifications */}

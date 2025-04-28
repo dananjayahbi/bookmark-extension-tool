@@ -5,7 +5,11 @@ import {
   IconButton,
   Tooltip,
   Divider,
-  Badge
+  Badge,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import {
   CreateNewFolder as CreateFolderIcon,
@@ -16,7 +20,8 @@ import {
   Delete as DeleteIcon,
   ContentCut as CutIcon,
   ContentCopy as CopyIcon,
-  ContentPaste as PasteIcon
+  ContentPaste as PasteIcon,
+  FormatSize as SizeIcon
 } from '@mui/icons-material';
 
 const Toolbar = ({
@@ -31,8 +36,27 @@ const Toolbar = ({
   onCutSelected,
   onCopySelected,
   onPaste,
-  darkMode
+  darkMode,
+  iconSize = 'medium',
+  onIconSizeChange
 }) => {
+  const [sizeMenu, setSizeMenu] = React.useState(null);
+
+  const handleSizeMenuOpen = (event) => {
+    setSizeMenu(event.currentTarget);
+  };
+
+  const handleSizeMenuClose = () => {
+    setSizeMenu(null);
+  };
+
+  const handleSizeSelect = (size) => {
+    if (onIconSizeChange) {
+      onIconSizeChange(size);
+    }
+    handleSizeMenuClose();
+  };
+
   return (
     <Box
       sx={{
@@ -61,6 +85,37 @@ const Toolbar = ({
           {isDesktopView ? <GridViewIcon /> : <DesktopViewIcon />}
         </IconButton>
       </Tooltip>
+      
+      <Tooltip title="Change Icon Size">
+        <IconButton onClick={handleSizeMenuOpen} size="medium">
+          <SizeIcon />
+        </IconButton>
+      </Tooltip>
+      
+      <Menu
+        anchorEl={sizeMenu}
+        open={Boolean(sizeMenu)}
+        onClose={handleSizeMenuClose}
+      >
+        <MenuItem 
+          onClick={() => handleSizeSelect('small')}
+          selected={iconSize === 'small'}
+        >
+          <ListItemText primary="Small" />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSizeSelect('medium')}
+          selected={iconSize === 'medium'}
+        >
+          <ListItemText primary="Medium" />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSizeSelect('large')}
+          selected={iconSize === 'large'}
+        >
+          <ListItemText primary="Large" />
+        </MenuItem>
+      </Menu>
       
       <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
       

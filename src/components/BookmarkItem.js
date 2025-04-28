@@ -33,6 +33,25 @@ const PREDEFINED_ICONS = {
   education: <EducationIcon style={{ color: '#3F51B5' }} />
 };
 
+// Size configurations
+const SIZE_CONFIG = {
+  small: {
+    item: { width: 70, height: 70 },
+    icon: { width: 24, height: 24 },
+    fontSize: 'xx-small'
+  },
+  medium: {
+    item: { width: 90, height: 90 },
+    icon: { width: 32, height: 32 },
+    fontSize: 'caption'
+  },
+  large: {
+    item: { width: 120, height: 120 },
+    icon: { width: 48, height: 48 },
+    fontSize: 'body2'
+  }
+};
+
 const BookmarkItem = ({ 
   item, 
   onOpen, 
@@ -47,7 +66,8 @@ const BookmarkItem = ({
   gridDimensions,
   onDropInFolder,
   index,
-  moveItem
+  moveItem,
+  iconSize = 'medium'
 }) => {
   const [customIcon, setCustomIcon] = useState(null);
   const [customIconData, setCustomIconData] = useState(null);
@@ -56,6 +76,9 @@ const BookmarkItem = ({
   const [isHovering, setIsHovering] = useState(false);
   const isFolder = !item.url;
   const itemRef = useRef(null);
+  
+  // Get the size configuration based on the iconSize prop
+  const sizeConfig = SIZE_CONFIG[iconSize] || SIZE_CONFIG.medium;
   
   // For dragging individual items
   const [{ isDragging }, drag] = useDrag(() => ({
@@ -124,11 +147,11 @@ const BookmarkItem = ({
         // Make sure item doesn't go out of bounds
         const dimensions = gridDimensions?.();
         if (dimensions) {
-          if (newPosition.x > dimensions.width - 100) {
-            newPosition.x = dimensions.width - 100;
+          if (newPosition.x > dimensions.width - sizeConfig.item.width) {
+            newPosition.x = dimensions.width - sizeConfig.item.width;
           }
-          if (newPosition.y > dimensions.height - 100) {
-            newPosition.y = dimensions.height - 100;
+          if (newPosition.y > dimensions.height - sizeConfig.item.height) {
+            newPosition.y = dimensions.height - sizeConfig.item.height;
           }
         }
         
@@ -138,7 +161,7 @@ const BookmarkItem = ({
         }
       }
     }
-  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index]);
+  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index, sizeConfig.item.width, sizeConfig.item.height]);
 
   // For dropping items into folders
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
@@ -264,8 +287,8 @@ const BookmarkItem = ({
         <Box 
           component="img" 
           sx={{ 
-            width: 32, 
-            height: 32, 
+            width: sizeConfig.icon.width, 
+            height: sizeConfig.icon.height, 
             objectFit: 'contain'
           }} 
           src={customIconData} 
@@ -276,7 +299,11 @@ const BookmarkItem = ({
     
     // If we have a predefined icon, show it
     if (customIcon && PREDEFINED_ICONS[customIcon]) {
-      return PREDEFINED_ICONS[customIcon];
+      return React.cloneElement(PREDEFINED_ICONS[customIcon], { 
+        sx: { 
+          fontSize: sizeConfig.icon.width
+        } 
+      });
     }
     
     // For bookmarks, show website favicon
@@ -285,8 +312,8 @@ const BookmarkItem = ({
         <Box 
           component="img" 
           sx={{ 
-            width: 32, 
-            height: 32, 
+            width: sizeConfig.icon.width, 
+            height: sizeConfig.icon.height, 
             objectFit: 'contain'
           }} 
           src={faviconUrl} 
@@ -296,7 +323,12 @@ const BookmarkItem = ({
     }
     
     // Default icons
-    return isFolder ? PREDEFINED_ICONS.folder : PREDEFINED_ICONS.default;
+    const defaultIcon = isFolder ? PREDEFINED_ICONS.folder : PREDEFINED_ICONS.default;
+    return React.cloneElement(defaultIcon, { 
+      sx: { 
+        fontSize: sizeConfig.icon.width
+      } 
+    });
   };
 
   const handleClick = (e) => {
@@ -332,8 +364,8 @@ const BookmarkItem = ({
       ref={itemDragRef}
       elevation={2}
       sx={{
-        width: 90,
-        height: 90,
+        width: sizeConfig.item.width,
+        height: sizeConfig.item.height,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -378,23 +410,22 @@ const BookmarkItem = ({
           }}
         >
           <Checkbox
-            size="small"
+            size={iconSize === 'small' ? 'small' : 'medium'}
             checked={isSelected}
             onChange={() => onToggleSelect(item)}
             color="primary"
-            icon={<UnselectedIcon fontSize="small" />}
-            checkedIcon={<SelectedIcon fontSize="small" />}
+            icon={<UnselectedIcon fontSize={iconSize === 'small' ? 'small' : 'medium'} />}
+            checkedIcon={<SelectedIcon fontSize={iconSize === 'small' ? 'small' : 'medium'} />}
             onClick={(e) => e.stopPropagation()}
           />
         </Box>
       )}
       
       <Box sx={{ 
-        fontSize: 36, 
         display: 'flex', 
         justifyContent: 'center', 
         mb: 1,
-        height: 40,
+        height: sizeConfig.icon.height + 8,
         position: 'relative'
       }}>
         {isFolder && isOver && canDrop ? (
@@ -416,7 +447,7 @@ const BookmarkItem = ({
       </Box>
       
       <Typography 
-        variant="caption" 
+        variant={sizeConfig.fontSize}
         align="center" 
         noWrap 
         sx={{ 

@@ -17,7 +17,8 @@ const BookmarkGrid = ({
   onToggleSelect,
   darkMode,
   onDropInFolder,
-  onReorderItems
+  onReorderItems,
+  iconSize = 'medium'  // Added iconSize prop with default value
 }) => {
   const [gridRef, setGridRef] = useState(null);
   const gridContainerRef = useRef(null);
@@ -158,6 +159,7 @@ const BookmarkGrid = ({
             gridDimensions={getGridDimensions}
             onDropInFolder={onDropInFolder}
             moveItem={moveItem}
+            iconSize={iconSize}  // Pass the iconSize prop to each BookmarkItem
           />
         ))
       ) : (
@@ -177,6 +179,7 @@ const BookmarkGrid = ({
                 darkMode={darkMode}
                 onDropInFolder={onDropInFolder}
                 moveItem={moveItem}
+                iconSize={iconSize}  // Pass the iconSize prop to each BookmarkItem
               />
             </Grid>
           ))}

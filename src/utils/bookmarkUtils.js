@@ -381,3 +381,21 @@ export const cloneBookmark = async (sourceId, targetFolderId) => {
     throw error;
   }
 };
+
+// Save icon size preference
+export const saveIconSizePreference = (size) => {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ iconSize: size }, () => {
+      resolve();
+    });
+  });
+};
+
+// Get icon size preference
+export const getIconSizePreference = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('iconSize', (result) => {
+      resolve(result.iconSize || 'medium');
+    });
+  });
+};
