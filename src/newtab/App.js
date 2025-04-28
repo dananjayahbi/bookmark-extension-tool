@@ -458,6 +458,15 @@ const App = () => {
     savePositions(newPositions);
   };
 
+  // Handle temporary position changes in organize mode
+  const handleTempPositionChange = (id, position) => {
+    setTempPositions(prev => {
+      const newPositions = { ...prev, [id]: position };
+      setPendingChanges(true);
+      return newPositions;
+    });
+  };
+
   // Handle dropping items into folders
   const handleDropInFolder = async (itemIds, targetFolderId) => {
     if (!itemIds.length || !targetFolderId) return;
@@ -940,15 +949,6 @@ const App = () => {
     showSnackbar('Item positions saved successfully', 'success');
   };
 
-  // Handle temporary position changes in organize mode
-  const handleTempPositionChange = (id, position) => {
-    setTempPositions(prev => {
-      const newPositions = { ...prev, [id]: position };
-      setPendingChanges(true);
-      return newPositions;
-    });
-  };
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1026,6 +1026,7 @@ const App = () => {
             isOrganizeMode={isOrganizeMode}
             onToggleOrganizeMode={handleToggleOrganizeMode}
             onTempPositionChange={handleTempPositionChange}
+            tempPositions={tempPositions}
             onSaveOrganizedItems={handleSaveOrganizedItems}
           />
           
