@@ -23,7 +23,7 @@ const BookmarkGrid = ({
   isOrganizeMode = false,
   onToggleOrganizeMode,
   onTempPositionChange,
-  onSaveOrganizedItems
+  tempPositions = {}
 }) => {
   const [gridRef, setGridRef] = useState(null);
   const gridContainerRef = useRef(null);
@@ -128,11 +128,24 @@ const BookmarkGrid = ({
       return updatedItems;
     });
     
+    // Don't update backend order during organizing mode in desktop view
+    if (isOrganizeMode && isDesktopView) {
+      return;
+    }
+    
     // Update backend via parent component once drag is complete
     if (onReorderItems) {
       onReorderItems(dragId, hoverId, dragIndex, hoverIndex);
     }
-  }, [onReorderItems]);
+  }, [onReorderItems, isOrganizeMode, isDesktopView]);
+
+  // Get the correct position for an item based on mode
+  const getItemPosition = (itemId) => {
+    if (isOrganizeMode && tempPositions && Object.keys(tempPositions).length > 0) {
+      return tempPositions[itemId] || itemPositions[itemId];
+    }
+    return itemPositions[itemId];
+  }
 
   return (
     <Box
@@ -165,7 +178,7 @@ const BookmarkGrid = ({
             onOpen={handleOpen}
             onContextMenu={onContextMenu}
             isDesktopView={true}
-            position={itemPositions[item.id] || null}
+            position={getItemPosition(item.id)}
             onPositionChange={isOrganizeMode ? onTempPositionChange : onItemPositionChange}
             isMultiSelectMode={isMultiSelectMode}
             isSelected={isItemSelected(item)}

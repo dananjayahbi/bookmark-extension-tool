@@ -490,18 +490,18 @@ const App = () => {
   // Arrange items in a grid in desktop view
   const generateGridPositions = (items, containerWidth, containerHeight) => {
     const positions = {};
-    // Get dimensions based on selected icon size
+    // Get dimensions based on selected icon size with proper spacing
     const sizeConfig = {
-      small: { width: 80, height: 90 },
-      medium: { width: 100, height: 120 },
-      large: { width: 130, height: 150 }
+      small: { width: 80, height: 90, spacingX: 20, spacingY: 20 },
+      medium: { width: 100, height: 120, spacingX: 30, spacingY: 30 },
+      large: { width: 130, height: 150, spacingX: 40, spacingY: 40 }
     };
     
     const config = sizeConfig[iconSize] || sizeConfig.medium;
-    const iconWidth = config.width;
-    const iconHeight = config.height;
+    const itemWidth = config.width + config.spacingX;
+    const itemHeight = config.height + config.spacingY;
     
-    const maxPerRow = Math.floor(containerWidth / iconWidth);
+    const maxPerRow = Math.floor((containerWidth - 40) / itemWidth);
     const startX = 20; // Left margin
     const startY = 20; // Top margin
     
@@ -510,8 +510,8 @@ const App = () => {
       const col = index % maxPerRow;
       
       positions[item.id] = {
-        x: startX + (col * iconWidth),
-        y: startY + (row * iconHeight)
+        x: startX + (col * itemWidth),
+        y: startY + (row * itemHeight)
       };
     });
     
@@ -1001,6 +1001,9 @@ const App = () => {
             darkMode={darkMode}
             iconSize={iconSize}
             onIconSizeChange={handleIconSizeChange}
+            isOrganizeMode={isOrganizeMode}
+            onToggleOrganizeMode={handleToggleOrganizeMode}
+            onSaveOrganizedItems={handleSaveOrganizedItems}
           />
           
           <BookmarkGrid 
