@@ -88,13 +88,15 @@ const BookmarkItem = ({
           type: 'MULTI_BOOKMARK_ITEMS',
           id: item.id, // Keep individual ID for compatibility
           isFolder,
-          index
+          index,
+          isSelected
         };
       }
       return { 
         id: item.id, 
         isFolder,
-        index
+        index,
+        isSelected
       };
     },
     canDrag: isOrganizeMode || !isMultiSelectMode || isSelected, // Allow dragging in organize mode or if selected in multi-select
@@ -333,8 +335,8 @@ const BookmarkItem = ({
         justifyContent: 'center',
         padding: '8px',
         cursor: isOrganizeMode ? 'move' : isMultiSelectMode ? 'default' : 'pointer',
-        opacity: isDragging ? 0.5 : 1,
-        transition: 'transform 0.2s, box-shadow 0.2s',
+        opacity: isDragging ? 0.5 : (isMultiSelectMode && !isSelected) ? 0.6 : 1,
+        transition: 'transform 0.2s, box-shadow 0.2s, opacity 0.2s',
         '&:hover': {
           transform: isMultiSelectMode ? 'none' : 'scale(1.05)',
           boxShadow: isMultiSelectMode ? 3 : 4
