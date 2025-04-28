@@ -21,7 +21,10 @@ import {
   ContentCut as CutIcon,
   ContentCopy as CopyIcon,
   ContentPaste as PasteIcon,
-  FormatSize as SizeIcon
+  FormatSize as SizeIcon,
+  Apps as OrganizeIcon,
+  Save as SaveIcon,
+  Close as CancelIcon
 } from '@mui/icons-material';
 
 const Toolbar = ({
@@ -38,7 +41,10 @@ const Toolbar = ({
   onPaste,
   darkMode,
   iconSize = 'medium',
-  onIconSizeChange
+  onIconSizeChange,
+  isOrganizeMode = false,
+  onToggleOrganizeMode,
+  onSaveOrganizedItems
 }) => {
   const [sizeMenu, setSizeMenu] = React.useState(null);
 
@@ -116,6 +122,45 @@ const Toolbar = ({
           <ListItemText primary="Large" />
         </MenuItem>
       </Menu>
+
+      {/* Organize Mode Controls */}
+      {isDesktopView && (
+        <>
+          <Tooltip title={isOrganizeMode ? "Exit Organize Mode" : "Enter Organize Mode"}>
+            <IconButton 
+              onClick={onToggleOrganizeMode} 
+              color={isOrganizeMode ? "primary" : "default"}
+              size="medium"
+            >
+              <OrganizeIcon />
+            </IconButton>
+          </Tooltip>
+          
+          {isOrganizeMode && (
+            <>
+              <Tooltip title="Save Positions">
+                <IconButton 
+                  onClick={onSaveOrganizedItems}
+                  color="success"
+                  size="medium"
+                >
+                  <SaveIcon />
+                </IconButton>
+              </Tooltip>
+              
+              <Tooltip title="Cancel Changes">
+                <IconButton 
+                  onClick={onToggleOrganizeMode}
+                  color="error"
+                  size="medium"
+                >
+                  <CancelIcon />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </>
+      )}
       
       <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
       
@@ -159,6 +204,7 @@ const Toolbar = ({
           onClick={onToggleMultiSelect} 
           size="medium"
           color={isMultiSelectMode ? "primary" : "default"}
+          disabled={isOrganizeMode} // Disable if in organize mode
         >
           <SelectIcon />
         </IconButton>
@@ -184,6 +230,25 @@ const Toolbar = ({
             </IconButton>
           </Tooltip>
         </>
+      )}
+      
+      {/* Spacer to push any additional controls to the right */}
+      <Box sx={{ flexGrow: 1 }} />
+      
+      {/* Visual indicator for active mode */}
+      {(isMultiSelectMode || isOrganizeMode) && (
+        <Box 
+          sx={{ 
+            bgcolor: isMultiSelectMode ? 'primary.main' : 'success.main',
+            color: 'white',
+            px: 2,
+            py: 0.5,
+            borderRadius: 1,
+            fontSize: '0.875rem'
+          }}
+        >
+          {isMultiSelectMode ? 'Selection Mode' : 'Organize Mode'}
+        </Box>
       )}
     </Box>
   );

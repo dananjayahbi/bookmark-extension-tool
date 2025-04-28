@@ -97,6 +97,11 @@ const App = () => {
   // Selection state for multi-select operations
   const [selectedItems, setSelectedItems] = useState([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+
+  // Organization mode for arranging items
+  const [isOrganizeMode, setIsOrganizeMode] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState(false);
+  const [tempPositions, setTempPositions] = useState({});
   
   // Navigation history - store full bookmark objects
   const [navigationHistory, setNavigationHistory] = useState([]);
@@ -896,6 +901,54 @@ const App = () => {
     }
   };
 
+  // Toggle organize mode
+  const handleToggleOrganizeMode = () => {
+    if (isOrganizeMode) {
+      // Exiting organize mode without saving changes
+      if (pendingChanges) {
+        // Discard changes by reverting to saved positions
+        showSnackbar('Changes discarded', 'info');
+      }
+      setIsOrganizeMode(false);
+      setPendingChanges(false);
+      setTempPositions({});
+    } else {
+      // Entering organize mode
+      // Initialize temp positions with current positions
+      setTempPositions({...itemPositions});
+      setIsOrganizeMode(true);
+      showSnackbar('Organize Mode: Rearrange items and click Save when done', 'info');
+    }
+  };
+
+  // Save changes made in organize mode
+  const handleSaveOrganizedItems = () => {
+    if (!pendingChanges) {
+      showSnackbar('No changes to save', 'info');
+      return;
+    }
+    
+    // Save the temporary positions to permanent storage
+    setItemPositions(tempPositions);
+    savePositions(tempPositions);
+    
+    // Exit organize mode
+    setIsOrganizeMode(false);
+    setPendingChanges(false);
+    setTempPositions({});
+    
+    showSnackbar('Item positions saved successfully', 'success');
+  };
+
+  // Handle temporary position changes in organize mode
+  const handleTempPositionChange = (id, position) => {
+    setTempPositions(prev => {
+      const newPositions = { ...prev, [id]: position };
+      setPendingChanges(true);
+      return newPositions;
+    });
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -966,6 +1019,11 @@ const App = () => {
             onDropInFolder={handleDropInFolder}
             onReorderItems={handleReorderItems}
             iconSize={iconSize}
+            // Pass organize mode props
+            isOrganizeMode={isOrganizeMode}
+            onToggleOrganizeMode={handleToggleOrganizeMode}
+            onTempPositionChange={handleTempPositionChange}
+            onSaveOrganizedItems={handleSaveOrganizedItems}
           />
           
           {/* Feedback notifications */}

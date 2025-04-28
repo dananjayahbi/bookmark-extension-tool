@@ -18,7 +18,12 @@ const BookmarkGrid = ({
   darkMode,
   onDropInFolder,
   onReorderItems,
-  iconSize = 'medium'  // Added iconSize prop with default value
+  iconSize = 'medium',
+  // Organize mode props
+  isOrganizeMode = false,
+  onToggleOrganizeMode,
+  onTempPositionChange,
+  onSaveOrganizedItems
 }) => {
   const [gridRef, setGridRef] = useState(null);
   const gridContainerRef = useRef(null);
@@ -54,7 +59,8 @@ const BookmarkGrid = ({
           return {
             desktop: true,
             x: monitor.getClientOffset().x,
-            y: monitor.getClientOffset().y
+            y: monitor.getClientOffset().y,
+            isOrganizeMode // Pass the organize mode flag
           };
         }
       }
@@ -62,7 +68,7 @@ const BookmarkGrid = ({
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     })
-  }), [isDesktopView, selectedItems]);
+  }), [isDesktopView, selectedItems, isOrganizeMode]);
 
   // Set ref for drop area
   const setRef = (ref) => {
@@ -73,6 +79,11 @@ const BookmarkGrid = ({
 
   // Handle double click on a bookmark
   const handleOpen = (item) => {
+    // Don't open if in organize mode
+    if (isOrganizeMode) {
+      return;
+    }
+    
     if (item.url) {
       window.open(item.url, '_blank');
     } else {
@@ -137,7 +148,11 @@ const BookmarkGrid = ({
               ? 'linear-gradient(45deg, #1a1a1a 0%, #2d2d2d 100%)' 
               : 'linear-gradient(45deg, #f5f5f5 0%, #e0e0e0 100%)'
             )
-          : 'transparent'
+          : 'transparent',
+        // Change cursor for organize mode
+        cursor: isOrganizeMode ? 'move' : 'default',
+        // Add a subtle indicator for organize mode
+        border: isOrganizeMode ? '2px dashed #4caf50' : 'none'
       }}
     >
       {isDesktopView ? (
@@ -151,7 +166,7 @@ const BookmarkGrid = ({
             onContextMenu={onContextMenu}
             isDesktopView={true}
             position={itemPositions[item.id] || null}
-            onPositionChange={onItemPositionChange}
+            onPositionChange={isOrganizeMode ? onTempPositionChange : onItemPositionChange}
             isMultiSelectMode={isMultiSelectMode}
             isSelected={isItemSelected(item)}
             onToggleSelect={onToggleSelect}
@@ -159,7 +174,8 @@ const BookmarkGrid = ({
             gridDimensions={getGridDimensions}
             onDropInFolder={onDropInFolder}
             moveItem={moveItem}
-            iconSize={iconSize}  // Pass the iconSize prop to each BookmarkItem
+            iconSize={iconSize}
+            isOrganizeMode={isOrganizeMode}
           />
         ))
       ) : (
@@ -179,7 +195,8 @@ const BookmarkGrid = ({
                 darkMode={darkMode}
                 onDropInFolder={onDropInFolder}
                 moveItem={moveItem}
-                iconSize={iconSize}  // Pass the iconSize prop to each BookmarkItem
+                iconSize={iconSize}
+                isOrganizeMode={isOrganizeMode}
               />
             </Grid>
           ))}

@@ -15,7 +15,8 @@ import {
   Flight as TravelIcon,
   School as EducationIcon,
   CheckBox as SelectedIcon,
-  CheckBoxOutlineBlank as UnselectedIcon
+  CheckBoxOutlineBlank as UnselectedIcon,
+  DragIndicator as DragIcon
 } from '@mui/icons-material';
 
 // Predefined icon components with Material UI
@@ -67,7 +68,8 @@ const BookmarkItem = ({
   onDropInFolder,
   index,
   moveItem,
-  iconSize = 'medium'
+  iconSize = 'medium',
+  isOrganizeMode = false
 }) => {
   const [customIcon, setCustomIcon] = useState(null);
   const [customIconData, setCustomIconData] = useState(null);
@@ -84,7 +86,7 @@ const BookmarkItem = ({
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'BOOKMARK_ITEM',
     item: () => {
-      if (isSelected && onDropInFolder) {
+      if (isSelected && onDropInFolder && !isOrganizeMode) {
         // If this is part of a multi-selection, use special handler
         // Get all selected item IDs from the parent component
         return {
@@ -104,7 +106,7 @@ const BookmarkItem = ({
         originalPosition: itemPosition
       };
     },
-    canDrag: !isMultiSelectMode || isSelected, // Can drag in multi-select mode only if selected
+    canDrag: isOrganizeMode || !isMultiSelectMode || isSelected, // Allow dragging in organize mode or if selected in multi-select
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging()
     }),
@@ -115,8 +117,8 @@ const BookmarkItem = ({
         return;
       }
       
-      if (dropResult.folderId && onDropInFolder) {
-        // Item was dropped into a folder
+      if (dropResult.folderId && onDropInFolder && !isOrganizeMode) {
+        // Item was dropped into a folder (only if not in organize mode)
         if (isSelected && isMultiSelectMode) {
           // This is a multi-selection drop, let the parent component handle it
           window.postMessage({
@@ -161,7 +163,7 @@ const BookmarkItem = ({
         }
       }
     }
-  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index, sizeConfig.item.width, sizeConfig.item.height]);
+  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index, sizeConfig.item.width, sizeConfig.item.height, isOrganizeMode]);
 
   // For dropping items into folders
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
@@ -169,10 +171,11 @@ const BookmarkItem = ({
     canDrop: (droppedItem) => {
       // Only allow dropping into folders, not into items
       // And prevent dropping onto itself
-      return isFolder && droppedItem.id !== item.id;
+      // Also disable dropping into folders in organize mode
+      return isFolder && droppedItem.id !== item.id && !isOrganizeMode;
     },
     drop: (droppedItem) => {
-      if (isFolder) {
+      if (isFolder && !isOrganizeMode) {
         if (droppedItem.type === 'MULTI_BOOKMARK_ITEMS') {
           // Multiple items being dropped into this folder
           return { 
@@ -189,7 +192,7 @@ const BookmarkItem = ({
       isOver: !!monitor.isOver(),
       canDrop: !!monitor.canDrop()
     })
-  }), [isFolder, item.id]);
+  }), [isFolder, item.id, isOrganizeMode]);
 
   // For reordering in grid view
   const [, dropReorder] = useDrop(() => ({
@@ -225,15 +228,21 @@ const BookmarkItem = ({
       const hoverClientY = clientOffset.y - hoverBoundingRect.top;
       const hoverClientX = clientOffset.x - hoverBoundingRect.left;
       
+      // Make it easier to reorder by reducing the threshold
+      // for when items will switch positions
+      const threshold = 0.15; // 15% of the way across
+
       // Dragging downwards/rightwards
       if (dragIndex < hoverIndex && 
-          (hoverClientY < hoverMiddleY || hoverClientX < hoverMiddleX)) {
+          (hoverClientY < hoverMiddleY * (1 - threshold) || 
+           hoverClientX < hoverMiddleX * (1 - threshold))) {
         return;
       }
       
       // Dragging upwards/leftwards
       if (dragIndex > hoverIndex && 
-          (hoverClientY > hoverMiddleY || hoverClientX > hoverMiddleX)) {
+          (hoverClientY > hoverMiddleY * (1 + threshold) || 
+           hoverClientX > hoverMiddleX * (1 + threshold))) {
         return;
       }
       
@@ -336,7 +345,7 @@ const BookmarkItem = ({
     
     if (isMultiSelectMode) {
       onToggleSelect(item);
-    } else {
+    } else if (!isOrganizeMode) {
       onOpen(item);
     }
   };
@@ -344,14 +353,18 @@ const BookmarkItem = ({
   const handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onContextMenu(e, item);
+    
+    // Disable context menu in organize mode
+    if (!isOrganizeMode) {
+      onContextMenu(e, item);
+    }
   };
 
   // Combine all the drag and drop refs for folders and grid reordering
   const itemDragRef = (el) => {
     drag(el);
     itemRef.current = el;
-    if (isFolder) {
+    if (isFolder && !isOrganizeMode) { // Don't enable folder drop in organize mode
       drop(el);
     }
     if (!isDesktopView) {
@@ -371,7 +384,7 @@ const BookmarkItem = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '8px',
-        cursor: isMultiSelectMode ? 'default' : 'pointer',
+        cursor: isOrganizeMode ? 'move' : isMultiSelectMode ? 'default' : 'pointer',
         opacity: isDragging ? 0.5 : 1,
         transition: 'transform 0.2s, box-shadow 0.2s',
         '&:hover': {
@@ -388,11 +401,13 @@ const BookmarkItem = ({
             : (isFolder 
               ? (darkMode ? '#333333' : '#f5f5f5') 
               : (darkMode ? '#2d2d2d' : '#fff')),
-        border: isSelected 
-          ? `2px solid ${darkMode ? '#90caf9' : '#1976d2'}`
-          : isFolder && isOver && canDrop
-            ? `2px dashed ${darkMode ? '#4caf50' : '#2e7d32'}`
-            : 'none',
+        border: isOrganizeMode 
+          ? `2px dashed ${darkMode ? '#4caf50' : '#2e7d32'}`
+          : isSelected 
+            ? `2px solid ${darkMode ? '#90caf9' : '#1976d2'}`
+            : isFolder && isOver && canDrop
+              ? `2px dashed ${darkMode ? '#4caf50' : '#2e7d32'}`
+              : 'none',
         zIndex: isOver && canDrop ? 10 : isDragging ? 100 : isHovering ? 5 : 1
       }}
       onClick={handleClick}
@@ -400,6 +415,21 @@ const BookmarkItem = ({
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
+      {/* Show drag handle indicator in organize mode */}
+      {isOrganizeMode && (
+        <Box 
+          sx={{ 
+            position: 'absolute', 
+            top: 4, 
+            right: 4,
+            zIndex: 2,
+            color: darkMode ? '#90caf9' : '#1976d2'
+          }}
+        >
+          <DragIcon fontSize="small" />
+        </Box>
+      )}
+      
       {isMultiSelectMode && (
         <Box 
           sx={{ 
