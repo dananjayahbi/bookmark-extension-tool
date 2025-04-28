@@ -176,7 +176,12 @@ const App = () => {
 
   // Toggle item selection
   const handleToggleSelect = (item) => {
-    if (!isMultiSelectMode) return;
+    if (!isMultiSelectMode) {
+      // If not in multi-select mode, enable it and select the item
+      setIsMultiSelectMode(true);
+      setSelectedItems([item]);
+      return;
+    }
     
     setSelectedItems(prevSelected => {
       const isSelected = prevSelected.some(selected => selected.id === item.id);

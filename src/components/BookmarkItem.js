@@ -292,8 +292,10 @@ const BookmarkItem = ({
     e.stopPropagation();
     
     if (isMultiSelectMode) {
+      // In multi-select mode, handle selection only
       onToggleSelect(item);
     } else if (!isOrganizeMode) {
+      // In normal mode, open the bookmark/folder
       onOpen(item);
     }
   };
@@ -385,7 +387,10 @@ const BookmarkItem = ({
           <Checkbox
             size={iconSize === 'small' ? 'small' : 'medium'}
             checked={isSelected}
-            onChange={() => onToggleSelect(item)}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item);
+            }}
             color="primary"
             icon={<UnselectedIcon fontSize={iconSize === 'small' ? 'small' : 'medium'} />}
             checkedIcon={<SelectedIcon fontSize={iconSize === 'small' ? 'small' : 'medium'} />}
