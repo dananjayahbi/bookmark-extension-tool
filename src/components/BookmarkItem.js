@@ -56,15 +56,11 @@ const SIZE_CONFIG = {
 const BookmarkItem = ({ 
   item, 
   onOpen, 
-  onContextMenu, 
-  position,
-  isDesktopView, 
-  onPositionChange,
+  onContextMenu,
   isMultiSelectMode = false,
   isSelected = false,
   onToggleSelect,
   darkMode = false,
-  gridDimensions,
   onDropInFolder,
   index,
   moveItem,
@@ -74,7 +70,6 @@ const BookmarkItem = ({
   const [customIcon, setCustomIcon] = useState(null);
   const [customIconData, setCustomIconData] = useState(null);
   const [faviconUrl, setFaviconUrl] = useState(null);
-  const [itemPosition, setItemPosition] = useState(position || { x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const isFolder = !item.url;
   const itemRef = useRef(null);
@@ -93,17 +88,13 @@ const BookmarkItem = ({
           type: 'MULTI_BOOKMARK_ITEMS',
           id: item.id, // Keep individual ID for compatibility
           isFolder,
-          index,
-          position: itemPosition,
-          originalPosition: itemPosition
+          index
         };
       }
       return { 
         id: item.id, 
         isFolder,
-        index,
-        position: itemPosition,
-        originalPosition: itemPosition
+        index
       };
     },
     canDrag: isOrganizeMode || !isMultiSelectMode || isSelected, // Allow dragging in organize mode or if selected in multi-select
@@ -130,40 +121,8 @@ const BookmarkItem = ({
           onDropInFolder([draggedItem.id], dropResult.folderId);
         }
       }
-      else if (dropResult.desktop && isDesktopView) {
-        // Calculate new position for desktop view
-        if (dropResult.multiple) {
-          // Part of multi-drop (handled by parent component)
-          return;
-        }
-        
-        // Individual item position update
-        const deltaX = dropResult.x - monitor.getInitialClientOffset().x;
-        const deltaY = dropResult.y - monitor.getInitialClientOffset().y;
-        
-        const newPosition = { 
-          x: Math.max(0, itemPosition.x + deltaX),
-          y: Math.max(0, itemPosition.y + deltaY)
-        };
-        
-        // Make sure item doesn't go out of bounds
-        const dimensions = gridDimensions?.();
-        if (dimensions) {
-          if (newPosition.x > dimensions.width - sizeConfig.item.width) {
-            newPosition.x = dimensions.width - sizeConfig.item.width;
-          }
-          if (newPosition.y > dimensions.height - sizeConfig.item.height) {
-            newPosition.y = dimensions.height - sizeConfig.item.height;
-          }
-        }
-        
-        setItemPosition(newPosition);
-        if (onPositionChange) {
-          onPositionChange(item.id, newPosition);
-        }
-      }
     }
-  }), [item.id, itemPosition, isDesktopView, isMultiSelectMode, isSelected, onDropInFolder, index, sizeConfig.item.width, sizeConfig.item.height, isOrganizeMode]);
+  }), [item.id, isMultiSelectMode, isSelected, onDropInFolder, index, isOrganizeMode]);
 
   // For dropping items into folders
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
@@ -199,15 +158,10 @@ const BookmarkItem = ({
     accept: 'BOOKMARK_ITEM',
     canDrop: (droppedItem) => {
       // Prevent dropping onto itself
-      return droppedItem.id !== item.id && !isDesktopView;
+      return droppedItem.id !== item.id;
     },
     hover: (droppedItem, monitor) => {
       if (!itemRef.current || droppedItem.id === item.id) {
-        return;
-      }
-      
-      // Don't trigger in desktop view
-      if (isDesktopView) {
         return;
       }
       
@@ -261,7 +215,7 @@ const BookmarkItem = ({
       isReorderOver: !!monitor.isOver(),
       canReorderDrop: !!monitor.canDrop()
     })
-  }), [index, isDesktopView, moveItem, item.id]);
+  }), [index, moveItem, item.id]);
 
   useEffect(() => {
     const loadIconData = async () => {
@@ -282,12 +236,6 @@ const BookmarkItem = ({
     
     loadIconData();
   }, [item.id, item.url]);
-
-  useEffect(() => {
-    if (position) {
-      setItemPosition(position);
-    }
-  }, [position]);
 
   const getIconDisplay = () => {
     // If we have custom icon data (uploaded by user), show it
@@ -367,9 +315,7 @@ const BookmarkItem = ({
     if (isFolder && !isOrganizeMode) { // Don't enable folder drop in organize mode
       drop(el);
     }
-    if (!isDesktopView) {
-      dropReorder(el);
-    }
+    dropReorder(el);
   };
 
   return (
@@ -391,9 +337,6 @@ const BookmarkItem = ({
           transform: isMultiSelectMode ? 'none' : 'scale(1.05)',
           boxShadow: isMultiSelectMode ? 3 : 4
         },
-        position: isDesktopView ? 'absolute' : 'relative',
-        left: isDesktopView ? `${itemPosition.x}px` : 'auto',
-        top: isDesktopView ? `${itemPosition.y}px` : 'auto',
         backgroundColor: isSelected 
           ? (darkMode ? 'rgba(144, 202, 249, 0.16)' : 'rgba(25, 118, 210, 0.08)')
           : isFolder && isOver && canDrop 

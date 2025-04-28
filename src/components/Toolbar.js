@@ -14,8 +14,6 @@ import {
 import {
   CreateNewFolder as CreateFolderIcon,
   Refresh as RefreshIcon,
-  ViewModule as GridViewIcon,
-  ViewQuilt as DesktopViewIcon,
   SelectAll as SelectIcon,
   Delete as DeleteIcon,
   ContentCut as CutIcon,
@@ -30,8 +28,6 @@ import {
 const Toolbar = ({
   onCreateFolder,
   onRefresh,
-  isDesktopView,
-  onToggleView,
   isMultiSelectMode,
   onToggleMultiSelect,
   selectedCount,
@@ -86,12 +82,6 @@ const Toolbar = ({
       
       <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
       
-      <Tooltip title={isDesktopView ? "Switch to Grid View" : "Switch to Desktop View"}>
-        <IconButton onClick={onToggleView} size="medium">
-          {isDesktopView ? <GridViewIcon /> : <DesktopViewIcon />}
-        </IconButton>
-      </Tooltip>
-      
       <Tooltip title="Change Icon Size">
         <IconButton onClick={handleSizeMenuOpen} size="medium">
           <SizeIcon />
@@ -124,41 +114,37 @@ const Toolbar = ({
       </Menu>
 
       {/* Organize Mode Controls */}
-      {isDesktopView && (
+      <Tooltip title={isOrganizeMode ? "Exit Organize Mode" : "Enter Organize Mode"}>
+        <IconButton 
+          onClick={onToggleOrganizeMode} 
+          color={isOrganizeMode ? "primary" : "default"}
+          size="medium"
+        >
+          <OrganizeIcon />
+        </IconButton>
+      </Tooltip>
+      
+      {isOrganizeMode && (
         <>
-          <Tooltip title={isOrganizeMode ? "Exit Organize Mode" : "Enter Organize Mode"}>
+          <Tooltip title="Save Order">
             <IconButton 
-              onClick={onToggleOrganizeMode} 
-              color={isOrganizeMode ? "primary" : "default"}
+              onClick={onSaveOrganizedItems}
+              color="success"
               size="medium"
             >
-              <OrganizeIcon />
+              <SaveIcon />
             </IconButton>
           </Tooltip>
           
-          {isOrganizeMode && (
-            <>
-              <Tooltip title="Save Positions">
-                <IconButton 
-                  onClick={onSaveOrganizedItems}
-                  color="success"
-                  size="medium"
-                >
-                  <SaveIcon />
-                </IconButton>
-              </Tooltip>
-              
-              <Tooltip title="Cancel Changes">
-                <IconButton 
-                  onClick={onToggleOrganizeMode}
-                  color="error"
-                  size="medium"
-                >
-                  <CancelIcon />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
+          <Tooltip title="Cancel Changes">
+            <IconButton 
+              onClick={onToggleOrganizeMode}
+              color="error"
+              size="medium"
+            >
+              <CancelIcon />
+            </IconButton>
+          </Tooltip>
         </>
       )}
       

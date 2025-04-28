@@ -9,9 +9,6 @@ const BookmarkGrid = ({
   onNavigate, 
   onContextMenu, 
   onRefresh,
-  isDesktopView, 
-  itemPositions, 
-  onItemPositionChange,
   isMultiSelectMode,
   selectedItems,
   onToggleSelect,
@@ -22,8 +19,7 @@ const BookmarkGrid = ({
   // Organize mode props
   isOrganizeMode = false,
   onToggleOrganizeMode,
-  onTempPositionChange,
-  tempPositions = {}
+  onSaveOrganizedItems
 }) => {
   const [gridRef, setGridRef] = useState(null);
   const gridContainerRef = useRef(null);
@@ -34,41 +30,17 @@ const BookmarkGrid = ({
     setItems(bookmarks);
   }, [bookmarks]);
 
-  // Desktop area drop handler
+  // Grid area drop handler
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ['BOOKMARK_ITEM', 'MULTI_BOOKMARK_ITEMS'],
     drop: (item, monitor) => {
-      if (isDesktopView) {
-        if (item.type === 'MULTI_BOOKMARK_ITEMS') {
-          // Handle multiple items being dragged
-          const dropOffset = monitor.getClientOffset();
-          const initialOffset = monitor.getInitialClientOffset();
-          const initialSourceOffset = monitor.getInitialSourceClientOffset();
-          
-          // Calculate the drop position for each item
-          return {
-            desktop: true,
-            multiple: true,
-            items: item.items,
-            dropOffset,
-            initialOffset,
-            initialSourceOffset
-          };
-        } else {
-          // Single item drag
-          return {
-            desktop: true,
-            x: monitor.getClientOffset().x,
-            y: monitor.getClientOffset().y,
-            isOrganizeMode // Pass the organize mode flag
-          };
-        }
-      }
+      // We only handle dropping into folders in BookmarkItem component
+      return; 
     },
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     })
-  }), [isDesktopView, selectedItems, isOrganizeMode]);
+  }), [selectedItems, isOrganizeMode]);
 
   // Set ref for drop area
   const setRef = (ref) => {
@@ -77,7 +49,7 @@ const BookmarkGrid = ({
     gridContainerRef.current = ref;
   };
 
-  // Handle double click on a bookmark
+  // Handle opening a bookmark
   const handleOpen = (item) => {
     // Don't open if in organize mode
     if (isOrganizeMode) {
@@ -128,24 +100,11 @@ const BookmarkGrid = ({
       return updatedItems;
     });
     
-    // Don't update backend order during organizing mode in desktop view
-    if (isOrganizeMode && isDesktopView) {
-      return;
-    }
-    
     // Update backend via parent component once drag is complete
-    if (onReorderItems) {
+    if (onReorderItems && !isOrganizeMode) {
       onReorderItems(dragId, hoverId, dragIndex, hoverIndex);
     }
-  }, [onReorderItems, isOrganizeMode, isDesktopView]);
-
-  // Get the correct position for an item based on mode
-  const getItemPosition = (itemId) => {
-    if (isOrganizeMode && tempPositions && Object.keys(tempPositions).length > 0) {
-      return tempPositions[itemId] || itemPositions[itemId];
-    }
-    return itemPositions[itemId];
-  }
+  }, [onReorderItems, isOrganizeMode]);
 
   return (
     <Box
@@ -156,65 +115,33 @@ const BookmarkGrid = ({
         padding: 2,
         height: '100%',
         position: 'relative',
-        background: isDesktopView 
-          ? (darkMode 
-              ? 'linear-gradient(45deg, #1a1a1a 0%, #2d2d2d 100%)' 
-              : 'linear-gradient(45deg, #f5f5f5 0%, #e0e0e0 100%)'
-            )
-          : 'transparent',
+        background: 'transparent',
         // Change cursor for organize mode
         cursor: isOrganizeMode ? 'move' : 'default',
         // Add a subtle indicator for organize mode
         border: isOrganizeMode ? '2px dashed #4caf50' : 'none'
       }}
     >
-      {isDesktopView ? (
-        // Desktop view (free position)
-        items.map((item, index) => (
-          <BookmarkItem
-            key={item.id}
-            item={item}
-            index={index}
-            onOpen={handleOpen}
-            onContextMenu={onContextMenu}
-            isDesktopView={true}
-            position={getItemPosition(item.id)}
-            onPositionChange={isOrganizeMode ? onTempPositionChange : onItemPositionChange}
-            isMultiSelectMode={isMultiSelectMode}
-            isSelected={isItemSelected(item)}
-            onToggleSelect={onToggleSelect}
-            darkMode={darkMode}
-            gridDimensions={getGridDimensions}
-            onDropInFolder={onDropInFolder}
-            moveItem={moveItem}
-            iconSize={iconSize}
-            isOrganizeMode={isOrganizeMode}
-          />
-        ))
-      ) : (
-        // Grid view
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          {items.map((item, index) => (
-            <Grid item key={item.id}>
-              <BookmarkItem
-                item={item}
-                index={index}
-                onOpen={handleOpen}
-                onContextMenu={onContextMenu}
-                isDesktopView={false}
-                isMultiSelectMode={isMultiSelectMode}
-                isSelected={isItemSelected(item)}
-                onToggleSelect={onToggleSelect}
-                darkMode={darkMode}
-                onDropInFolder={onDropInFolder}
-                moveItem={moveItem}
-                iconSize={iconSize}
-                isOrganizeMode={isOrganizeMode}
-              />
-            </Grid>
-          ))}
-        </Grid>
-      )}
+      <Grid container spacing={2} sx={{ mt: 1 }}>
+        {items.map((item, index) => (
+          <Grid item key={item.id}>
+            <BookmarkItem
+              item={item}
+              index={index}
+              onOpen={handleOpen}
+              onContextMenu={onContextMenu}
+              isMultiSelectMode={isMultiSelectMode}
+              isSelected={isItemSelected(item)}
+              onToggleSelect={onToggleSelect}
+              darkMode={darkMode}
+              onDropInFolder={onDropInFolder}
+              moveItem={moveItem}
+              iconSize={iconSize}
+              isOrganizeMode={isOrganizeMode}
+            />
+          </Grid>
+        ))}
+      </Grid>
     </Box>
   );
 };

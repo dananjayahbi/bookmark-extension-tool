@@ -22,8 +22,6 @@ import {
   calculateFolderDepth,
   flatten,
   getBookmarkIconUrl,
-  getSavedViewPreference, 
-  saveViewPreference,
   getSavedPositions,
   savePositions,
   uploadCustomIcon,
@@ -90,7 +88,6 @@ const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
-  const [isDesktopView, setIsDesktopView] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const theme = getTheme(darkMode ? 'dark' : 'light');
   
@@ -101,14 +98,10 @@ const App = () => {
   // Organization mode for arranging items
   const [isOrganizeMode, setIsOrganizeMode] = useState(false);
   const [pendingChanges, setPendingChanges] = useState(false);
-  const [tempPositions, setTempPositions] = useState({});
   
   // Navigation history - store full bookmark objects
   const [navigationHistory, setNavigationHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  
-  // Item positions for desktop view (stored in local storage)
-  const [itemPositions, setItemPositions] = useState({});
   
   // Dialog states
   const [createFolderDialog, setCreateFolderDialog] = useState(false);
@@ -144,14 +137,6 @@ const App = () => {
   // Load saved item positions and preferences from storage
   const loadPreferences = async () => {
     try {
-      // Load desktop view preference
-      const viewPreference = await getSavedViewPreference();
-      setIsDesktopView(viewPreference);
-      
-      // Load saved positions
-      const positions = await getSavedPositions();
-      setItemPositions(positions || {});
-      
       // Load dark mode preference 
       chrome.storage.local.get('darkMode', (result) => {
         setDarkMode(result.darkMode || false);
@@ -202,11 +187,6 @@ const App = () => {
       }
     });
   };
-
-  // Save view preference when it changes
-  useEffect(() => {
-    saveViewPreference(isDesktopView);
-  }, [isDesktopView]);
 
   // Load bookmarks from Chrome API
   const loadBookmarks = async () => {
@@ -446,27 +426,6 @@ const App = () => {
     handleSearch();
   }, [searchQuery]);
 
-  // Toggle between desktop and grid view
-  const handleToggleView = () => {
-    setIsDesktopView(!isDesktopView);
-  };
-
-  // Handle item position changes in desktop view
-  const handleItemPositionChange = (id, position) => {
-    const newPositions = { ...itemPositions, [id]: position };
-    setItemPositions(newPositions);
-    savePositions(newPositions);
-  };
-
-  // Handle temporary position changes in organize mode
-  const handleTempPositionChange = (id, position) => {
-    setTempPositions(prev => {
-      const newPositions = { ...prev, [id]: position };
-      setPendingChanges(true);
-      return newPositions;
-    });
-  };
-
   // Handle dropping items into folders
   const handleDropInFolder = async (itemIds, targetFolderId) => {
     if (!itemIds.length || !targetFolderId) return;
@@ -489,70 +448,6 @@ const App = () => {
       showSnackbar('Error moving items', 'error');
     }
   };
-
-  // Handle multi-selection drag and drop
-  const handleMultiSelectionDrop = (items, targetFolderId) => {
-    if (!items.length || !targetFolderId) return;
-    handleDropInFolder(items.map(item => item.id), targetFolderId);
-  };
-
-  // Arrange items in a grid in desktop view
-  const generateGridPositions = (items, containerWidth, containerHeight) => {
-    const positions = {};
-    // Get dimensions based on selected icon size with proper spacing
-    const sizeConfig = {
-      small: { width: 80, height: 90, spacingX: 20, spacingY: 20 },
-      medium: { width: 100, height: 120, spacingX: 30, spacingY: 30 },
-      large: { width: 130, height: 150, spacingX: 40, spacingY: 40 }
-    };
-    
-    const config = sizeConfig[iconSize] || sizeConfig.medium;
-    const itemWidth = config.width + config.spacingX;
-    const itemHeight = config.height + config.spacingY;
-    
-    const maxPerRow = Math.floor((containerWidth - 40) / itemWidth);
-    const startX = 20; // Left margin
-    const startY = 20; // Top margin
-    
-    items.forEach((item, index) => {
-      const row = Math.floor(index / maxPerRow);
-      const col = index % maxPerRow;
-      
-      positions[item.id] = {
-        x: startX + (col * itemWidth),
-        y: startY + (row * itemHeight)
-      };
-    });
-    
-    return positions;
-  };
-
-  // Initialize desktop view with grid layout
-  const initializeDesktopLayout = () => {
-    // Only initialize positions for items that don't already have positions
-    const newPositions = { ...itemPositions };
-    const width = window.innerWidth;
-    const height = window.innerHeight - 200; // Adjust for header/toolbar height
-    
-    const defaultPositions = generateGridPositions(bookmarks, width, height);
-    
-    // Only set positions for items that don't already have one
-    bookmarks.forEach(item => {
-      if (!newPositions[item.id]) {
-        newPositions[item.id] = defaultPositions[item.id];
-      }
-    });
-    
-    setItemPositions(newPositions);
-    savePositions(newPositions);
-  };
-
-  // Initialize desktop layout when view changes or bookmarks change
-  useEffect(() => {
-    if (isDesktopView && bookmarks.length > 0) {
-      initializeDesktopLayout();
-    }
-  }, [isDesktopView, bookmarks.length]);
 
   // Show snackbar notification
   const showSnackbar = (message, severity = 'info') => {
@@ -920,11 +815,8 @@ const App = () => {
       }
       setIsOrganizeMode(false);
       setPendingChanges(false);
-      setTempPositions({});
     } else {
       // Entering organize mode
-      // Initialize temp positions with current positions
-      setTempPositions({...itemPositions});
       setIsOrganizeMode(true);
       showSnackbar('Organize Mode: Rearrange items and click Save when done', 'info');
     }
@@ -932,21 +824,12 @@ const App = () => {
 
   // Save changes made in organize mode
   const handleSaveOrganizedItems = () => {
-    if (!pendingChanges) {
-      showSnackbar('No changes to save', 'info');
-      return;
-    }
-    
-    // Save the temporary positions to permanent storage
-    setItemPositions(tempPositions);
-    savePositions(tempPositions);
-    
     // Exit organize mode
     setIsOrganizeMode(false);
     setPendingChanges(false);
-    setTempPositions({});
     
-    showSnackbar('Item positions saved successfully', 'success');
+    showSnackbar('Item order saved successfully', 'success');
+    refreshCurrentFolder();
   };
 
   return (
@@ -977,8 +860,6 @@ const App = () => {
           <Toolbar 
             onCreateFolder={() => setCreateFolderDialog(true)} 
             onRefresh={refreshCurrentFolder}
-            isDesktopView={isDesktopView}
-            onToggleView={handleToggleView}
             isMultiSelectMode={isMultiSelectMode}
             onToggleMultiSelect={handleToggleMultiSelect}
             selectedCount={selectedItems.length}
@@ -1012,9 +893,6 @@ const App = () => {
             onNavigate={navigateTo}
             onContextMenu={handleContextMenu}
             onRefresh={refreshCurrentFolder}
-            isDesktopView={isDesktopView}
-            itemPositions={itemPositions}
-            onItemPositionChange={handleItemPositionChange}
             isMultiSelectMode={isMultiSelectMode}
             selectedItems={selectedItems}
             onToggleSelect={handleToggleSelect}
@@ -1025,8 +903,6 @@ const App = () => {
             // Pass organize mode props
             isOrganizeMode={isOrganizeMode}
             onToggleOrganizeMode={handleToggleOrganizeMode}
-            onTempPositionChange={handleTempPositionChange}
-            tempPositions={tempPositions}
             onSaveOrganizedItems={handleSaveOrganizedItems}
           />
           
