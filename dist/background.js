@@ -1,0 +1,1 @@
+chrome.runtime.onInstalled.addListener((function(){console.log("Bookmark Desktop extension installed or updated")})),chrome.action.onClicked.addListener((function(){chrome.tabs.create({url:"bookmarkDesktop.html"})})),chrome.runtime.onMessage.addListener((function(e,o,n){return"keepAlive"===e.action&&n({status:"alive"}),!0}));
